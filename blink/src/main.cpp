@@ -6,7 +6,7 @@
 #include "blink.pio.h" 
 
 // PIO 출력을 사용할 핀 정의 (Pico 온보드 LED)
-#define LED_PIN (2) 
+#define LED_PIN (28) 
 
 int main() {
 	// 1. 기본 설정
@@ -25,8 +25,8 @@ int main() {
 
 	// 6. 데이터 전송 루프 (Blink 속도 변경)
 	uint32_t delay_counts[] = {
-		12,  // 7
-		6,   // 1
+		500,
+		250,
 	};
 	int num_delays = sizeof(delay_counts) / sizeof(delay_counts[0]);
 	int delay_duration_ms = 2000; // 각 속도를 2초간 유지

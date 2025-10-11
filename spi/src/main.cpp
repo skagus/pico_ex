@@ -147,16 +147,6 @@ void flash_erase(uint32_t addr, uint32_t size)
 
 void spi_peri()
 {
-
-	/* SPI 동작 정책.
-	1. Cmd : 1Byte.
-	2. Address : 3Byte.
-	3. Dummy : 0~2Byte.
-	4. Data는 최대 256Byte.
-
-	C:2X A:3X D:X O:2X 포멧으로 SPI 통신.
-	C:2X A:3X D:X I:2X 포멧으로 SPI 통신.
-	*/
 	// 1. Init SPI pins
 	gpio_init(CS_PIN);
 	gpio_set_dir(CS_PIN, GPIO_OUT);
