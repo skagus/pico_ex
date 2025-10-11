@@ -1,0 +1,4 @@
+dddd..
+
+Side: CLK, CS.
+set : Io0~Io3

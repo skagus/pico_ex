@@ -1,0 +1,51 @@
+;
+; Copyright (c) 2020 Raspberry Pi (Trading) Ltd.
+;
+; SPDX-License-Identifier: BSD-3-Clause
+;
+
+; Side-set pin 0 is used for PWM output
+
+.program ws2812
+.side_set 2 opt
+
+.define public T1 2
+.define public T2 5
+.define public T3 3
+
+.wrap_target
+bitloop:
+    out x, 1       side 0b00 [T3 - 1] ; Side-set still takes place when instruction stalls
+    jmp !x do_zero side 0b11 [T1 - 1] ; Branch on the bit we shifted out. Positive pulse
+do_one:
+    nop            side 0b11 [1]
+    jmp  bitloop   side 0b11 [T2 - 2] ; Continue driving high, for a long pulse
+do_zero:
+    nop            side 0b00 [1]
+    jmp  bitloop   side 0b00 [T2 - 2] ; Or drive low, for a short pulse
+.wrap
+
+% c-sdk {
+#include "hardware/clocks.h"
+
+static inline void ws2812_program_init(PIO pio, uint sm, uint offset, uint pin, float freq) {
+
+    pio_gpio_init(pio, pin);
+    pio_gpio_init(pio, pin+1);
+    pio_sm_set_consecutive_pindirs(pio, sm, pin, 2, true);
+
+    pio_sm_config c = ws2812_program_get_default_config(offset);
+
+    // Set the side-set base pin. The count is already set by the .side_set directive
+    sm_config_set_sideset_pins(&c, pin);
+
+    sm_config_set_out_shift(&c, false, true, 24);
+
+    int cycles_per_bit = ws2812_T1 + ws2812_T2 + ws2812_T3;
+    float div = clock_get_hz(clk_sys) / (freq * cycles_per_bit);
+    sm_config_set_clkdiv(&c, div);
+
+    pio_sm_init(pio, sm, offset, &c);
+    pio_sm_set_enabled(pio, sm, true);
+}
+%}
