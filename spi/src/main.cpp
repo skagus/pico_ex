@@ -242,31 +242,100 @@ void spi_peri()
 	}
 }
 
+void pio_push(PIO pio, uint sm, uint8_t data)
+{
+	while(pio_sm_is_tx_fifo_full(pio, sm));
+	pio->txf[sm] = (uint32_t)data;
+}
+
 void spi_pio()
 {
-	// 1. 기본 설정
-	uint32_t freq = clock_get_hz(clk_sys);
-	printf("\n\nSys clock: %u Hz, %u\n", freq, SYS_CLK_MHZ);
+	// 1. Init SPI pins
+	gpio_init(CS_PIN);
+	gpio_put(CS_PIN, 0);	// CS High
+	gpio_set_dir(CS_PIN, GPIO_OUT);
+	gpio_set_drive_strength(CS_PIN, GPIO_DRIVE_STRENGTH_12MA);
 
-	// todo get free sm
+	gpio_init(MISO_PIN);
+	gpio_set_dir(MISO_PIN, GPIO_IN);
+	gpio_set_function(MISO_PIN, GPIO_FUNC_PIO0);
+
+	// 2. Setup PIO
 	PIO pio = pio0;
 	int sm = 0;
 	uint offset = pio_add_program(pio, &spi_program);
-	printf("Loaded program at %d\n", offset);
 
-	spi_program_init(pio, sm, offset, CS_PIN, MOSI_PIN, MISO_PIN);
+	spi_program_init(pio, sm, offset, CS_PIN, MOSI_PIN, MISO_PIN); // , 2 * 1000 * 1000); // 1MHz
 
-	// 2. LED 색상 버퍼 설정
+#if 0	
+	uint8_t tx_buf[5] = {0x00, 0xF1, 0x03, 0x07, 0xFF}; // JEDEC ID
+	tx_buf[0] = sizeof(tx_buf) - 2;
+
+//	pio_sm_put_blocking(pio, sm, 4<<16 | 8); // x --> tx byte count.
+	for(int i = 0; i < sizeof(tx_buf); i++)
+	{
+		pio_sm_put_blocking(pio, sm, 0xFFFFFFFF); // 0xAABBCC00 | tx_buf[i]);
+	}
+#elif 0
+	pio_sm_put_blocking(pio, sm, 3 << 16); // x --> tx byte count.
+	uint8_t bytes[] = {0xF0, 0x10, 0x20, 0x30}; // JEDEC ID
+	bytes[0] = 0x11;
+	pio_sm_put_blocking(pio, sm, *(uint32_t*)bytes); // x --> tx byte count.
+
+	pio_sm_put_blocking(pio, sm, 10 << 16); // x --> tx byte count.
+	bytes[0] = 0x22;
+	pio_sm_put_blocking(pio, sm, *(uint32_t*)bytes); // x --> tx byte count.
+	bytes[0] = 0x33;
+	pio_sm_put_blocking(pio, sm, *(uint32_t*)bytes); // x --> tx byte count.
+	bytes[0] = 0x44;
+	pio_sm_put_blocking(pio, sm, *(uint32_t*)bytes); // x --> tx byte count.
+
+	pio_sm_put_blocking(pio, sm, 15 << 16); // x --> tx byte count.
+	bytes[0] = 0x55;
+	pio_sm_put_blocking(pio, sm, *(uint32_t*)bytes); // x --> tx byte count.
+	bytes[0] = 0x66;
+	pio_sm_put_blocking(pio, sm, *(uint32_t*)bytes); // x --> tx byte count.
+	bytes[0] = 0x77;
+	pio_sm_put_blocking(pio, sm, *(uint32_t*)bytes); // x --> tx byte count.
+	bytes[0] = 0x88;
+	pio_sm_put_blocking(pio, sm, *(uint32_t*)bytes); // x --> tx byte count.
+#else
+	uint8_t seq = 0x10;
+	uint32_t tx_cnt;
+	uint32_t rx_cnt;
+
+	uint8_t tx_buf[4] = {0x03, 0x00, 0x01, 0x00};
+	tx_cnt = 4;
+	rx_cnt = 16;
+	pio_sm_put_blocking(pio, sm, (tx_cnt-1) << 16 | (rx_cnt-1)); // x --> tx byte count.
+	for(int i = 0; i < tx_cnt; i++)
+	{
+		seq++;
+		pio_push(pio, sm, tx_buf[i]);
+//		pio_sm_put_blocking(pio, sm, *(uint32_t*)bytes); // x --> tx byte count.
+	}
+	for(int i = 0; i < rx_cnt; i++)
+	{
+		uint32_t nRead = pio_sm_get_blocking(pio, sm); // Read data.
+		printf("Read Data[%d]: %02X\n", i, nRead & 0xFF);
+	}
+#endif
+//	uint32_t nRead = pio_sm_get_blocking(pio, sm); // Read data.
+//	printf("Read Data: %08X\n", nRead);
+
 }
+
 
 int main() {
 	// 1. 기본 설정
 	stdio_init_all();
 	sleep_ms(1000);
+
 	uint32_t freq = clock_get_hz(clk_sys);
 	printf("\n\nSys clock: %u Hz, %u\n", freq, SYS_CLK_MHZ);
 
-	spi_peri();
+//	spi_peri();
+	spi_pio();
 
 	return 0;
 }

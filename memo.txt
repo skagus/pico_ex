@@ -1,0 +1,15 @@
+Flash 용 PIO/SPI 구조를 생각해 보자. 
+
+Flash command는 .
+0. 실제로는 Half duplex.
+1. 단순 command out.
+2. Command out 후 N byte read.
+
+--> 이를 이용해서, 프로토콜을 만들면. 
+TX_FIFO는 Write 방향.
+	1st 32 bit는 [0:15 Write byte][16:31 Read byte count]
+	이어지는 write stream은 32 bit단위.
+RX_FIFO는 Read 방향.
+	Read byte count 만큼 계속 받아보자.
+	Read stream도 32 bit 단위.
+

@@ -1,49 +1,36 @@
 ; File: spi.pio
 
 .program spi
-.side_set 2 optional ; CS(1) CLK(0)
-	pull block 		side 0b10
+.side_set 2 optional ; SCK(1) CS(0)
+.define INACT		(0b01)
+.define CLK_LOW		(0b00)
+.define CLK_HIGH	(0b10)
+
 
 .wrap_target
-	out x, 8		side 0b10	; x --> tx byte count.
-	out y, 8		side 0b10	; y --> rx byte count.
-	jmp
+new_req:
+	pull block				side INACT
+	out x, 16							; TX bytes
+	out y, 16							; RX bytes
 
-tx_only:
-	nop				side 0b00	; Clk Low.
-	out pins, 4
-	nop				side 0b01	; Clk High.
-	jmp x-- tx_only			; Low 시간 (x + 1) 사이클
+byte_tx_loop:
+	pull block							; Fetch TX data.
+	out null 24							; Trash upper 24bits.
+bit_tx_loop:
+	out pins, 1				side CLK_LOW
+	jmp !osre bit_tx_loop	side CLK_HIGH
+	jmp x-- byte_tx_loop	side CLK_LOW
 
-tx_rx:
-	nop				side 0b00	; Clk Low.
-	out pins, 4
-	in pins, 4
-	nop				side 0b01	; Clk High.
-	jmp x-- tx_rx			; Low 시간 (x + 1) 사이클
-
-rx_only:
-	nop				side 0b00	; Clk Low.
-	out pins, 0
-	in pins, 4
-	nop				side 0b01	; Clk High.
-	jmp x-- tx_rx			; Low 시간 (x + 1) 사이클
-
-
-	jmp x-- lp1					; High 시간 (x + 1) 사이클
-	mov x, y		side 0	[3]
-data_out:
-	nop				side 0b00	; Clk Low.
-	out pins, 4
-	in pins, 4
-	nop				side 0b01	; Clk High.
-	jmp x-- data_out			; Low 시간 (x + 1) 사이클
-end:
-	nop				side 0b10	; CE deassert.
+	set pins, 0				side CLK_LOW
+byte_rx_loop:
+	set x 7					side CLK_LOW
+bit_rx_loop:
+	in pins, 1				side CLK_HIGH
+	jmp x-- bit_rx_loop		side CLK_LOW
+	push
+	jmp y-- byte_rx_loop
 
 .wrap
-
-; total 8 + (2 * (in + 1)) cycles
 
 
 ;===================================================================
@@ -52,27 +39,29 @@ end:
 // CS,SCK,MOSI - consecutive.
 static inline void spi_program_init(PIO pio, uint sm, uint offset, uint cs_pin, uint mosi, uint miso)
 {
-   pio_gpio_init(pio, cs_pin);
-   pio_gpio_init(pio, cs_pin + 1);
-   pio_gpio_init(pio, mosi);
-   pio_gpio_init(pio, miso);
+	pio_gpio_init(pio, cs_pin);
+	pio_gpio_init(pio, cs_pin + 1);
+	pio_gpio_init(pio, mosi);
+	pio_gpio_init(pio, miso);
 
-   pio_sm_config c = spi_program_get_default_config(offset);
-   sm_config_set_sideset_pins(&c, cs_pin);
-   sm_config_set_out_pins(&c, mosi, 1);
-   sm_config_set_in_pins(&c, miso);
+	pio_sm_config c = spi_program_get_default_config(offset);
+	sm_config_set_sideset_pins(&c, cs_pin);
+	sm_config_set_out_pins(&c, mosi, 1);
+	sm_config_set_in_pins(&c, miso);
+	// shift_right : LSB 1st.
+	// auto pull : if true, never use pull-like command.
+	// threshold.
+	sm_config_set_out_shift(&c, false, false, 32);
+	sm_config_set_in_shift(&c, false, false, 32);
 
-   sm_config_set_out_shift(&c, true, false, 8);
-   sm_config_set_in_shift(&c, true, false, 8);
+	pio_sm_set_consecutive_pindirs(pio, sm, cs_pin, 2, true); // CS, CLK.
+	pio_sm_set_consecutive_pindirs(pio, sm, mosi, 1, true); // MOSI.
+	pio_sm_set_consecutive_pindirs(pio, sm, miso, 1, false); // MISO.
 
-   pio_sm_set_consecutive_pindirs(pio, sm, cs_pin, 2, true); // CS, CLK.
-   pio_sm_set_consecutive_pindirs(pio, sm, mosi, 1, true); // MOSI.
-   pio_sm_set_consecutive_pindirs(pio, sm, miso, 1, false); // MISO.
-
-   //sm_config_set_clkdiv(&c, 125000.0);
-   sm_config_set_clkdiv(&c, 250000.0);
-   pio_sm_init(pio, sm, offset, &c);
-   pio_sm_set_enabled(pio, sm, true);
+	//sm_config_set_clkdiv(&c, 125000.0);
+	sm_config_set_clkdiv(&c, 250000.0);
+	pio_sm_init(pio, sm, offset, &c);
+	pio_sm_set_enabled(pio, sm, true);
 }
 
 %}
