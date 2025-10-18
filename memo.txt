@@ -13,3 +13,108 @@ RX_FIFO는 Read 방향.
 	Read byte count 만큼 계속 받아보자.
 	Read stream도 32 bit 단위.
 
+
+A0
+A1
+A2
+A3
+
+shift right case.
+	A3, A2, A1, A0 순서.
+Shift left case.
+	::A0, ::A1, ::A2, ::A3
+
+Byte order 지키면서, LSB 1st 하려면, 
+	1. Left + bit order 변경.
+	2. Right + byte order 변경.
+
+
+
+.wrap_target
+start:
+	pull block			side INACT
+	mov y osr
+	set x 3
+
+word_loop:
+	out pins, 1			side CLK_LOW
+	nop					side CLK_HIGH
+	out pins, 1			side CLK_LOW
+	nop					side CLK_HIGH
+	out pins, 1			side CLK_LOW
+	nop					side CLK_HIGH
+	out pins, 1			side CLK_LOW
+	nop					side CLK_HIGH
+	out pins, 1			side CLK_LOW
+	nop					side CLK_HIGH
+	out pins, 1			side CLK_LOW
+	nop					side CLK_HIGH
+	out pins, 1			side CLK_LOW
+	nop					side CLK_HIGH
+	out pins, 1			side CLK_LOW
+	nop					side CLK_HIGH
+	jmp x-- word_loop
+	;jmp !osre word_loop
+	jmp start			side INACT
+
+	; pull block			side INACT
+	out x, 8			side INACT ; TX byte count.
+	set x, 3
+.wrap
+
+
+
+===============
+16 비트씩 쪼개는 방법. (상위 16 bit가)
+start:
+	pull block			side INACT
+	out y, 16
+	out x, 16
+
+	mov osr, y
+	out null, 16
+word_loop:
+	out pins, 1			side CLK_LOW
+	nop					side CLK_HIGH
+	jmp !osre word_loop
+
+	mov osr, x
+	out null, 16
+word_loop2:
+	out pins, 1			side CLK_LOW
+	nop					side CLK_HIGH
+	jmp !osre word_loop2
+
+	jmp start			side INACT
+
+=========================
+TX 전송량 지정 및 전송 가능..
+TODO: byte order 문제.
+
+new_req:
+	pull block			side INACT
+	out y, 16						; RX Words, Higher 16bits
+	out x, 16						; TX Words, Lower 16 bits
+
+byte_loop:
+	jmp !osre cont
+	pull block
+cont:
+	out pins, 1			side CLK_LOW
+	nop					side CLK_HIGH
+	out pins, 1			side CLK_LOW
+	nop					side CLK_HIGH
+	out pins, 1			side CLK_LOW
+	nop					side CLK_HIGH
+	out pins, 1			side CLK_LOW
+	nop					side CLK_HIGH
+	out pins, 1			side CLK_LOW
+	nop					side CLK_HIGH
+	out pins, 1			side CLK_LOW
+	nop					side CLK_HIGH
+	out pins, 1			side CLK_LOW
+	nop					side CLK_HIGH
+	out pins, 1			side CLK_LOW
+	nop					side CLK_HIGH
+	jmp y-- byte_loop
+.wrap

@@ -8,6 +8,7 @@
 #include "hardware/gpio.h"
 #include "hardware/spi.h"
 #include "hardware/pio.h"
+#include "hardware/dma.h"
 #include "spi.pio.h"	// PIO 어셈블리 파일로부터 자동 생성된 헤더
 
 // PIO 출력을 사용할 핀 정의 (Pico 온보드 LED)
@@ -248,6 +249,72 @@ void pio_push(PIO pio, uint sm, uint8_t data)
 	pio->txf[sm] = (uint32_t)data;
 }
 
+
+int set_peri_rx_dma(uint8_t* peri_addr, uint8_t* buf_addr, uint32_t dreq, size_t cnt_xfer)
+{
+	int dma_chan = dma_claim_unused_channel(true);
+	dma_channel_config cfg = dma_channel_get_default_config(dma_chan);
+
+	// 4. DMA 상세 설정
+	// - 전송 단위: 8비트
+	// - 읽기 주소: 고정 (항상 같은 PIO RX FIFO 주소에서 읽음)
+	// - 쓰기 주소: 전송 후 자동으로 증가 (버퍼에 순차적으로 씀)
+	// - DREQ: PIO의 RX DREQ 신호에 맞춰 전송 트리거
+	channel_config_set_transfer_data_size(&cfg, DMA_SIZE_8);
+	channel_config_set_read_increment(&cfg, false);
+	channel_config_set_write_increment(&cfg, true);
+	channel_config_set_dreq(&cfg, dreq); // RX DREQ (false)
+
+	// 5. DMA 전송 시작
+	printf("Starting DMA capture...\n");
+	dma_channel_configure(
+		dma_chan,
+		&cfg,
+		buf_addr,      // 쓰기 주소: 데이터를 저장할 버퍼
+		peri_addr,     // 읽기 주소: PIO State Machine의 RX FIFO
+		cnt_xfer,         // 전송 횟수
+		true               // 즉시 시작
+	);
+	return dma_chan;
+}
+
+
+int set_peri_tx_dma(uint8_t* buf_addr, uint8_t* peri_addr, uint32_t dreq, size_t cnt_xfer)
+{
+	int dma_chan = dma_claim_unused_channel(true);
+	dma_channel_config cfg = dma_channel_get_default_config(dma_chan);
+
+	// 4. DMA 상세 설정
+	// - 전송 단위: 8비트
+	// - 읽기 주소: 고정 (항상 같은 PIO RX FIFO 주소에서 읽음)
+	// - 쓰기 주소: 전송 후 자동으로 증가 (버퍼에 순차적으로 씀)
+	// - DREQ: PIO의 RX DREQ 신호에 맞춰 전송 트리거
+	channel_config_set_transfer_data_size(&cfg, DMA_SIZE_8);
+	channel_config_set_read_increment(&cfg, true);
+	channel_config_set_write_increment(&cfg, false);
+	channel_config_set_dreq(&cfg, dreq); //
+
+	// 5. DMA 전송 시작
+	printf("Starting DMA capture...\n");
+	dma_channel_configure(
+		dma_chan,
+		&cfg,
+		peri_addr,      // 쓰기 주소: 데이터를 저장할 버퍼
+		buf_addr,     // 읽기 주소: PIO State Machine의 RX FIFO
+		cnt_xfer,         // 전송 횟수
+		true               // 즉시 시작
+	);
+	return dma_chan;
+}
+
+void wait_dma_done(int dma_chan)
+{
+	// 6. DMA 전송 완료 대기
+	dma_channel_wait_for_finish_blocking(dma_chan);
+	printf("DMA capture complete.\n");
+	dma_channel_unclaim(dma_chan);
+}
+
 void spi_pio()
 {
 	// 1. Init SPI pins
@@ -276,53 +343,50 @@ void spi_pio()
 	{
 		pio_sm_put_blocking(pio, sm, 0xFFFFFFFF); // 0xAABBCC00 | tx_buf[i]);
 	}
+
+
 #elif 0
-	pio_sm_put_blocking(pio, sm, 3 << 16); // x --> tx byte count.
-	uint8_t bytes[] = {0xF0, 0x10, 0x20, 0x30}; // JEDEC ID
-	bytes[0] = 0x11;
-	pio_sm_put_blocking(pio, sm, *(uint32_t*)bytes); // x --> tx byte count.
-
-	pio_sm_put_blocking(pio, sm, 10 << 16); // x --> tx byte count.
-	bytes[0] = 0x22;
-	pio_sm_put_blocking(pio, sm, *(uint32_t*)bytes); // x --> tx byte count.
-	bytes[0] = 0x33;
-	pio_sm_put_blocking(pio, sm, *(uint32_t*)bytes); // x --> tx byte count.
-	bytes[0] = 0x44;
-	pio_sm_put_blocking(pio, sm, *(uint32_t*)bytes); // x --> tx byte count.
-
-	pio_sm_put_blocking(pio, sm, 15 << 16); // x --> tx byte count.
-	bytes[0] = 0x55;
-	pio_sm_put_blocking(pio, sm, *(uint32_t*)bytes); // x --> tx byte count.
-	bytes[0] = 0x66;
-	pio_sm_put_blocking(pio, sm, *(uint32_t*)bytes); // x --> tx byte count.
-	bytes[0] = 0x77;
-	pio_sm_put_blocking(pio, sm, *(uint32_t*)bytes); // x --> tx byte count.
-	bytes[0] = 0x88;
-	pio_sm_put_blocking(pio, sm, *(uint32_t*)bytes); // x --> tx byte count.
-#else
-	uint8_t seq = 0x10;
 	uint32_t tx_cnt;
 	uint32_t rx_cnt;
 
 	uint8_t tx_buf[4] = {0x03, 0x00, 0x01, 0x00};
 	tx_cnt = 4;
 	rx_cnt = 16;
-	pio_sm_put_blocking(pio, sm, (tx_cnt-1) << 16 | (rx_cnt-1)); // x --> tx byte count.
+	pio_sm_put_blocking(pio, sm, (tx_cnt - 1) << 16 | (rx_cnt - 1)); // x --> tx byte count.
 	for(int i = 0; i < tx_cnt; i++)
 	{
-		seq++;
 		pio_push(pio, sm, tx_buf[i]);
-//		pio_sm_put_blocking(pio, sm, *(uint32_t*)bytes); // x --> tx byte count.
+		//		pio_sm_put_blocking(pio, sm, *(uint32_t*)bytes); // x --> tx byte count.
 	}
 	for(int i = 0; i < rx_cnt; i++)
 	{
 		uint32_t nRead = pio_sm_get_blocking(pio, sm); // Read data.
 		printf("Read Data[%d]: %02X\n", i, nRead & 0xFF);
 	}
+#else
+	uint8_t addr_buf[3] = {0x00, 0x01, 0x00}; // Address.
+	uint8_t rx_buf[16];
+
+	uint32_t tx_cnt = sizeof(addr_buf) + 1; // 명령 + 주소(1B)
+	uint32_t rx_cnt = sizeof(rx_buf);
+	
+	pio_sm_put_blocking(pio, sm, (tx_cnt-1) << 16 | (rx_cnt-1)); // High 16: TX count, Low 16: RX count.
+	pio_sm_put_blocking(pio, sm, 0x03); // x --> tx byte count.
+
+	uint32_t rx_dreq = pio_get_dreq(pio, sm, false);
+	int rx_dma_ch = set_peri_rx_dma((uint8_t*)&pio->rxf[sm], rx_buf, rx_dreq, sizeof(rx_buf));
+	uint32_t tx_dreq = pio_get_dreq(pio, sm, true);
+	int tx_dma_ch = set_peri_tx_dma(addr_buf, (uint8_t*)&pio->txf[sm], tx_dreq, sizeof(addr_buf));
+	// DMA 완료 대기
+	wait_dma_done(tx_dma_ch);
+	wait_dma_done(rx_dma_ch);
+
+	printf("DMA Read Data:\n");
+	dump(rx_buf, rx_cnt);
 #endif
 //	uint32_t nRead = pio_sm_get_blocking(pio, sm); // Read data.
 //	printf("Read Data: %08X\n", nRead);
-
+	printf("Done\n");
 }
 
 

@@ -19,11 +19,12 @@ pico_generate_pio_header(${PROJECT_NAME}
 
 # Link to the necessary SDK libraries
 target_link_libraries(${PROJECT_NAME}
-    pico_stdlib
-    hardware_pio
-    hardware_clocks
+	pico_stdlib
+	hardware_pio
+	hardware_clocks
 	hardware_gpio
 	hardware_spi
+	hardware_dma
 )
 
 # Enable USB serial output
