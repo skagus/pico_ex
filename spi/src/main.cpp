@@ -10,6 +10,8 @@
 #include "hardware/pio.h"
 #include "hardware/dma.h"
 #include "spi.pio.h"	// PIO 어셈블리 파일로부터 자동 생성된 헤더
+#include "spi_hw.h"
+#include "flash.h"
 
 // PIO 출력을 사용할 핀 정의 (Pico 온보드 LED)
 #define CS_PIN		(1)
@@ -25,15 +27,6 @@ void dump(const uint8_t* buf, size_t len)
 		if((i&0x0F) == 0x0F) printf("\n");
 	}
 	if(len & 0x0F) printf("\n");
-}
-
-void non_data(uint8_t cmd, uint8_t* rx_buf, size_t rx_len)
-{
-	uint8_t tx_buf[] = {cmd, 0,0,0,0,0,0};
-	memset(rx_buf, 0, rx_len);
-	gpio_put(CS_PIN, 0); // CS Low
-	spi_write_read_blocking(spi0, tx_buf, rx_buf, 1 + rx_len);
-	gpio_put(CS_PIN, 1); // CS High
 }
 
 #define CMP_CMD(cmd_str, input)	(strncmp(cmd_str, input, strlen(cmd_str))==0)
@@ -58,124 +51,11 @@ int str_token(char* tokens[], char* str, int max_tokens)
 	return i;
 }
 
-void _wren()
-{
-	uint8_t cmd[2] = {0x06, 0x00}; // Write Enable
-	gpio_put(CS_PIN, 0); // CS Low
-	spi_write_blocking(spi0, cmd, 1);
-	gpio_put(CS_PIN, 1); // CS High
-	sleep_ms(1);
-}
-
-void _wait_wip()
-{
-	while(true)
-	{
-		uint8_t status[2];
-		non_data(0x05, status, 2); // Read status
-		if((status[1] & 0x01) == 0) break; // WIP 비트가 클리어 될 때까지 대기.
-		sleep_ms(1);
-	}
-}
-
-void flash_pgm(uint32_t addr, uint32_t size, uint8_t key)
-{
-	uint8_t tx_buf[5 + 256]; // Command + Address + Data
-	memset(tx_buf, 0xFF, sizeof(tx_buf));
-	if(size > 256) size = 256;
-	tx_buf[0] = 0x02; // Page Program
-	tx_buf[1] = (uint8_t)(addr >> 16);
-	tx_buf[2] = (uint8_t)(addr >> 8);
-	tx_buf[3] = (uint8_t)(addr);
-	uint32_t* int_buf = (uint32_t*)(tx_buf + 4);
-	for(int i=0; i< size / 4; i++)
-	{
-		int_buf[i] = (addr << 8) | key;
-		addr++;
-	}
-	_wren(); // Write Enable
-	gpio_put(CS_PIN, 0); // CS Low
-	spi_write_blocking(spi0, tx_buf, 4 + size); // Command + Address + Data
-	gpio_put(CS_PIN, 1); // CS High
-	
-	_wait_wip();
-}
-
-void flash_read(uint32_t addr, uint32_t size, uint8_t* buf)
-{
-	printf("Read Data: 0x%6X, %d\n", addr, size);
-
-	uint8_t tx_buf[4] = {0x03, (uint8_t)(addr>>16), (uint8_t)(addr>>8), (uint8_t)(addr)};
-	if(size >= 256) size = 256;
-	memset(buf, 0, size);
-	gpio_put(CS_PIN, 0); // CS Low
-	spi_write_blocking(spi0, tx_buf, 4); // Command + Address
-	spi_read_blocking(spi0, 0x0, buf, size); // Data
-	gpio_put(CS_PIN, 1); // CS High
-}
-
-void _erase(uint8_t code, uint32_t addr)
-{
-	printf("Erase: %02X, %06X\n", code, addr);
-	uint8_t tx_buf[5] = {code, (uint8_t)(addr>>16), (uint8_t)(addr>>8), (uint8_t)(addr), 0};
-	_wren(); // Write Enable
-	gpio_put(CS_PIN, 0); // CS Low
-	spi_write_read_blocking(spi0, tx_buf, NULL, 4); // Command + Address
-	gpio_put(CS_PIN, 1); // CS High
-
-	_wait_wip();
-}
-
-void flash_erase(uint32_t addr, uint32_t size)
-{
-	printf("Erase Data: 0x%6X, %d\n", addr, size);
-
-	uint32_t un_aligned_addr = addr & (4096-1);
-	if(un_aligned_addr > 0)
-	{
-		uint32_t align_size = 4096 - un_aligned_addr;
-		addr += align_size;
-		size -= align_size;
-	}
-
-	while(size >= 4 * 1024)
-	{
-		_erase(0x20, addr); // Block Erase (64KB)
-		addr += 4 * 1024;
-		size -= 4 * 1024;
-	}
-}
-
 void spi_peri()
 {
-	// 1. Init SPI pins
-	gpio_init(CS_PIN);
-	gpio_set_dir(CS_PIN, GPIO_OUT);
-	gpio_set_drive_strength(CS_PIN, GPIO_DRIVE_STRENGTH_12MA);
-	gpio_put(CS_PIN, 1);	// CS High
-
-
-	gpio_init(SCK_PIN);
-	gpio_set_dir(SCK_PIN, GPIO_OUT);
-	gpio_set_function(SCK_PIN, GPIO_FUNC_SPI);
-	gpio_set_drive_strength(CS_PIN, GPIO_DRIVE_STRENGTH_12MA);
-	gpio_put(SCK_PIN, 0);	// SCK Low
-
-	gpio_init(MOSI_PIN);
-	gpio_set_dir(MOSI_PIN, GPIO_OUT);
-	gpio_set_function(MOSI_PIN, GPIO_FUNC_SPI);
-	gpio_set_drive_strength(CS_PIN, GPIO_DRIVE_STRENGTH_12MA);
-	gpio_put(MOSI_PIN, 0);	// MOSI Low
-
-	gpio_init(MISO_PIN);
-	gpio_set_dir(MISO_PIN, GPIO_IN);
-	gpio_set_function(MISO_PIN, GPIO_FUNC_SPI);
-	gpio_set_drive_strength(CS_PIN, GPIO_DRIVE_STRENGTH_12MA);
-
-	// 2. Setup SPI
-	spi_init(spi0, 2 * 1000 * 1000); // 1MHz
-	spi_set_format(spi0, 8, SPI_CPOL_0, SPI_CPHA_0, SPI_MSB_FIRST);
-	spi_set_slave(spi0, false); // Master mode
+	my_spi_t real_spi_hw;
+	my_spi_t* spi_hw = &real_spi_hw;
+	flash_init(spi_hw);
 
 	// Main loop.
 	uint32_t addr = 0;
@@ -198,46 +78,66 @@ void spi_peri()
 			size = strtol(tokens[2], NULL, 10);
 			key = (num_tokens >= 4) ? strtol(tokens[3] + 2, NULL, 16) : 0xFF;
 			printf("Program Data: 0x%6X, %d\n", addr, size);
-			flash_pgm(addr, size, key); // Read Data 명령
+			flash_pgm(spi_hw, addr, size, key); // Read Data 명령
 		}
 		else if(CMP_CMD("read", tokens[0]))
 		{
 			addr = strtol(tokens[1] + 2, NULL, 16);
 			size = strtol(tokens[2], NULL, 10);
-			flash_read(addr, size, buf); // Read Data 명령
+			flash_read(spi_hw, addr, size, buf); // Read Data 명령
 			dump(buf, size);
 		}
 		else if(CMP_CMD("erase", tokens[0]))
 		{
 			addr = strtol(tokens[1] + 2, NULL, 16);
 			size = strtol(tokens[2], NULL, 10);
-			flash_erase(addr, size); // Sector Erase 명령
+			flash_erase(spi_hw, addr, size); // Sector Erase 명령
 		}
 		else if(CMP_CMD("id", tokens[0]))
 		{
+			uint8_t aCmd[4] = {0x00, 0x00, 0x00, 0x00}; // JEDEC ID 읽기 명령
+			
 			printf("JEDEC ID\n");
-			non_data(0x9F, buf, 4); // JEDEC ID 읽기 명령
-			dump((const uint8_t*)(buf + 1), 4);
+			aCmd[0] = 0x9F; // JEDEC ID 읽기 명령
+			spi_hw_write_read(spi_hw, aCmd, 1, buf, 4);
+			dump(buf, 4);
+
+			printf("AT25 Manu/Dev ID\n");
+			aCmd[0] = 0x9F; // Manufacturer/Device ID 읽기 명령
+			spi_hw_write_read(spi_hw, aCmd, 1, buf, 4);
+			dump(buf, 4);
+
+			printf("AT25 OTP Security Addr0\n");
+			aCmd[0] = 0x77; // Unique ID 읽기 명령
+			spi_hw_write_read(spi_hw, aCmd, 6, buf, 8);
+			dump(buf, 8);
 		}
-		else if(CMP_CMD("status", tokens[0]))
+		else if(CMP_CMD("rsta", tokens[0]))
 		{
-			printf("Read Status ID\n");
-			non_data(0x05, (uint8_t*)buf, 2); // Read status
-			dump((uint8_t*)(buf + 1), 2);
+			uint8_t cmd;
+			printf("Read Status-1\n");
+			cmd = 0x05; // Read Status Register
+			spi_hw_write_read(spi_hw, &cmd, 1, buf, 2);
+			dump(buf, 2);
+
+			printf("Read Status-2\n");
+			cmd = 0x35; // Read Status Register
+			spi_hw_write_read(spi_hw, &cmd, 1, buf, 1);
+			dump(buf, 1);
 		}
 		else if(CMP_CMD("wsta", tokens[0]))
 		{
 			uint8_t status = strtol(tokens[1] + 2, NULL, 16);
 			uint8_t tx_buf[2] = {0x01, status}; // Write Status Register command
-			_wren(); // Must enable writes first
-			gpio_put(CS_PIN, 0); // CS Low
-			spi_write_blocking(spi0, tx_buf, 2);
-			gpio_put(CS_PIN, 1); // CS High
-			_wait_wip(); // Wait for the write to complete
+			flash_wren(spi_hw); // Must enable writes first
+			spi_hw_write_read(spi_hw, tx_buf, 2, nullptr, 0);
+			flash_wait_wip(spi_hw); // Wait for the write to complete
 		}
 		else
 		{
-			printf("Unknown command\n");
+			printf("Unknown command\n\n");
+			printf("pgm 0xADDR SIZE [0xKEY]\nread 0xADDR SIZE\nerase 0xADDR SIZE\n");
+			printf("id\nstatus\nwsta 0xSTATUS\n");
 		}
 		sleep_ms(1000);
 	}
@@ -295,7 +195,6 @@ int set_peri_tx_dma(uint8_t* buf_addr, uint8_t* peri_addr, uint32_t dreq, size_t
 	channel_config_set_dreq(&cfg, dreq); //
 
 	// 5. DMA 전송 시작
-	printf("Starting DMA capture...\n");
 	dma_channel_configure(
 		dma_chan,
 		&cfg,
@@ -311,7 +210,6 @@ void wait_dma_done(int dma_chan)
 {
 	// 6. DMA 전송 완료 대기
 	dma_channel_wait_for_finish_blocking(dma_chan);
-	printf("DMA capture complete.\n");
 	dma_channel_unclaim(dma_chan);
 }
 
@@ -398,8 +296,8 @@ int main() {
 	uint32_t freq = clock_get_hz(clk_sys);
 	printf("\n\nSys clock: %u Hz, %u\n", freq, SYS_CLK_MHZ);
 
-//	spi_peri();
-	spi_pio();
+	spi_peri();
+//	spi_pio();
 
 	return 0;
 }

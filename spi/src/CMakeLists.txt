@@ -3,7 +3,9 @@
 
 # Create our executable
 add_executable(${PROJECT_NAME}
-    main.cpp
+	spi_hw.cpp
+	flash.cpp
+	main.cpp
 )
 
 # Enable USB stdio
