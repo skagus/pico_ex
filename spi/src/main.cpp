@@ -108,7 +108,7 @@ void spi_peri()
 			dump(buf, 4);
 
 			printf("AT25 OTP Security Addr0\n");
-			aCmd[0] = 0x77; // Unique ID 읽기 명령
+			aCmd[0] = 0x77; // Unique ID 읽기 명령 cmd 1, Addr 3, dummy 2, data 1+
 			spi_hw_write_read(spi_hw, aCmd, 6, buf, 8);
 			dump(buf, 8);
 		}
@@ -117,8 +117,8 @@ void spi_peri()
 			uint8_t cmd;
 			printf("Read Status-1\n");
 			cmd = 0x05; // Read Status Register
-			spi_hw_write_read(spi_hw, &cmd, 1, buf, 2);
-			dump(buf, 2);
+			spi_hw_write_read(spi_hw, &cmd, 1, buf, 1);
+			dump(buf, 1);
 
 			printf("Read Status-2\n");
 			cmd = 0x35; // Read Status Register
@@ -133,6 +133,15 @@ void spi_peri()
 			spi_hw_write_read(spi_hw, tx_buf, 2, nullptr, 0);
 			flash_wait_wip(spi_hw); // Wait for the write to complete
 		}
+		else if(CMP_CMD("prot", tokens[0]))
+		{
+			printf("Read Sector Protect Status\n");
+			const uint32_t size = 4 * 1024 * 1024; // 4MB
+			// 4MB / 64KB = 64 sectors
+			int buf_size = size / (8 * 64 * 1024);
+			flash_read_sect_protect(spi_hw, size, buf);
+			dump(buf, buf_size);
+		}
 		else
 		{
 			printf("Unknown command\n\n");
@@ -143,6 +152,7 @@ void spi_peri()
 	}
 }
 
+#if 0
 void pio_push(PIO pio, uint sm, uint8_t data)
 {
 	while(pio_sm_is_tx_fifo_full(pio, sm));
@@ -286,7 +296,7 @@ void spi_pio()
 //	printf("Read Data: %08X\n", nRead);
 	printf("Done\n");
 }
-
+#endif
 
 int main() {
 	// 1. 기본 설정

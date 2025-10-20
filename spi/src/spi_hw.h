@@ -10,10 +10,20 @@
 #define MOSI_PIN	(3)
 #define MISO_PIN	(4)
 
+#define USE_PIO_FOR_FLASH	(1)
+
+#if (1 == USE_PIO_FOR_FLASH)
+struct my_spi_t {
+	PIO pio;
+	uint sm;
+	uint32_t cs_pin;
+};
+#else
 struct my_spi_t {
 	spi_inst_t* spi;
 	uint32_t cs_pin;
 };
+#endif
 
 void spi_hw_init(my_spi_t* spi_hw);
 void spi_hw_write_read(my_spi_t* spi_hw,

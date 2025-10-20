@@ -14,18 +14,21 @@ new_req:
 	out y, 16							; RX bytes
 
 byte_tx_loop:
+	jmp !x rx_start
 	pull block							; Fetch TX data.
 	out null 24							; Trash upper 24bits.
 bit_tx_loop:
-	out pins, 1				side CLK_LOW
+	out pins 1				side CLK_LOW
 	jmp !osre bit_tx_loop	side CLK_HIGH
 	jmp x-- byte_tx_loop	side CLK_LOW
 
-	set pins, 0				side CLK_LOW
+rx_start:
+	set pins 0				side CLK_LOW
 byte_rx_loop:
+	jmp !y new_req
 	set x 7					side CLK_LOW
 bit_rx_loop:
-	in pins, 1				side CLK_HIGH
+	in pins 1				side CLK_HIGH
 	jmp x-- bit_rx_loop		side CLK_LOW
 	push
 	jmp y-- byte_rx_loop
@@ -46,6 +49,7 @@ static inline void spi_program_init(PIO pio, uint sm, uint offset, uint cs_pin, 
 
 	pio_sm_config c = spi_program_get_default_config(offset);
 	sm_config_set_sideset_pins(&c, cs_pin);
+	sm_config_set_set_pins(&c, mosi, 1);
 	sm_config_set_out_pins(&c, mosi, 1);
 	sm_config_set_in_pins(&c, miso);
 	// shift_right : LSB 1st.

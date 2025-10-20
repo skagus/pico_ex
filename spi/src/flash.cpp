@@ -6,9 +6,6 @@
 #include "spi_hw.h"
 #include "flash.h"
 
-#if (1 == USE_PIO_FOR_FLASH)
-
-#else
 
 void flash_unprot(my_spi_t* spi_hw, uint32_t addr)
 {
@@ -58,6 +55,8 @@ void flash_pgm(my_spi_t* spi_hw, uint32_t addr, uint32_t size, uint8_t key)
 		int_buf[i] = (addr << 8) | key;
 		addr++;
 	}
+	flash_unprot(spi_hw, addr);
+	
 	flash_wren(spi_hw); // Write Enable
 	spi_hw_write_read(spi_hw, tx_buf, 4 + size, nullptr, 0);
 	flash_wait_wip(spi_hw);
@@ -103,6 +102,30 @@ void flash_erase(my_spi_t* spi_hw, uint32_t addr, uint32_t size)
 		size -= 4 * 1024;
 	}
 }
-#endif // USE_PIO_FOR_FLASH
+
+void flash_read_sect_protect(my_spi_t* spi_hw, uint32_t size, uint8_t* a_state)
+{
+	int bit_idx = 0;
+	uint8_t ret=0;
+	memset(a_state, 0, size / (8 * 64 * 1024));
+	for(int addr = 0; addr < size; addr += 64 * 1024)
+	{
+		uint8_t aCmd[4] = {0x3C, }; // Sector Protect Status
+		aCmd[1] = (uint8_t)(addr >> 16);
+		aCmd[2] = (uint8_t)(addr >> 8);
+		aCmd[3] = (uint8_t)(addr);
+		spi_hw_write_read(spi_hw, aCmd, 4, &ret, 1);
+		if(ret == 0xFF)
+		{
+			a_state[bit_idx / 8] |= (1 << (bit_idx % 8));
+		}
+		else
+		{
+			a_state[bit_idx / 8] &= ~(1 << (bit_idx % 8));
+		}
+		bit_idx++;
+	}
+}
+
 
 //////////////////////////////////////////////////////////
