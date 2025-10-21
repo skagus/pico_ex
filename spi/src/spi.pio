@@ -40,7 +40,7 @@ bit_rx_loop:
 
 % c-sdk {
 // CS,SCK,MOSI - consecutive.
-static inline void spi_program_init(PIO pio, uint sm, uint offset, uint cs_pin, uint mosi, uint miso)
+static inline void spi_program_init(PIO pio, uint sm, uint offset, uint cs_pin, uint mosi, uint miso, uint freq_kbps)
 {
 	pio_gpio_init(pio, cs_pin);
 	pio_gpio_init(pio, cs_pin + 1);
@@ -61,9 +61,11 @@ static inline void spi_program_init(PIO pio, uint sm, uint offset, uint cs_pin, 
 	pio_sm_set_consecutive_pindirs(pio, sm, cs_pin, 2, true); // CS, CLK.
 	pio_sm_set_consecutive_pindirs(pio, sm, mosi, 1, true); // MOSI.
 	pio_sm_set_consecutive_pindirs(pio, sm, miso, 1, false); // MISO.
-
-	//sm_config_set_clkdiv(&c, 125000.0);
-	sm_config_set_clkdiv(&c, 250000.0);
+	
+	// 62Mbps. -->0 
+	// 
+	float div = (float)62000 / freq_kbps;
+	sm_config_set_clkdiv(&c, div);
 	pio_sm_init(pio, sm, offset, &c);
 	pio_sm_set_enabled(pio, sm, true);
 }

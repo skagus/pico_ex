@@ -89,7 +89,7 @@ void spi_hw_init(my_spi_t* spi_hw)
 	int sm = 0;
 	uint offset = pio_add_program(pio, &spi_program);
 
-	spi_program_init(pio, sm, offset, CS_PIN, MOSI_PIN, MISO_PIN); // , 2 * 1000 * 1000); // 1MHz
+	spi_program_init(pio, sm, offset, CS_PIN, MOSI_PIN, MISO_PIN, 10000); // 10MHz
 	spi_hw->pio = pio;
 	spi_hw->sm = sm;
 	spi_hw->cs_pin = CS_PIN;
