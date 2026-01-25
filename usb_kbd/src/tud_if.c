@@ -1,6 +1,7 @@
 //#include "pico/stdlib.h"
 #include "tusb.h"
 #include "tud_if.h"
+#include "board.h"
 
 extern uint32_t blink_interval_ms;
 
@@ -38,13 +39,13 @@ uint16_t tud_hid_get_report_cb(uint8_t instance, uint8_t report_id, hid_report_t
 // Invoked when device is mounted
 void tud_mount_cb(void)
 {
-	blink_interval_ms = BLINK_MOUNTED;
+	board_set_led_period(BLINK_MOUNTED);
 }
 
 // Invoked when device is unmounted
 void tud_umount_cb(void)
 {
-	blink_interval_ms = BLINK_NOT_MOUNTED;
+	board_set_led_period(BLINK_NOT_MOUNTED);
 }
 
 // Invoked when usb bus is suspended
@@ -53,11 +54,11 @@ void tud_umount_cb(void)
 void tud_suspend_cb(bool remote_wakeup_en)
 {
 	(void)remote_wakeup_en;
-	blink_interval_ms = BLINK_SUSPENDED;
+	board_set_led_period(BLINK_SUSPENDED);
 }
 
 // Invoked when usb bus is resumed
 void tud_resume_cb(void)
 {
-	blink_interval_ms = BLINK_MOUNTED;
+	board_set_led_period(BLINK_MOUNTED);
 }
