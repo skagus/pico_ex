@@ -111,7 +111,7 @@ static void send_hid_report(bool keys_pressed, uint8_t key_codes[])
 
 	if(keys_pressed)
 	{
-		tud_hid_keyboard_report(REPORT_ID_KEYBOARD, 0, key_codes);
+		tud_hid_keyboard_report(REPORT_ID_KEYBOARD, key_codes[0], key_codes + 1);
 		send_empty = true;
 	}
 	else
@@ -131,7 +131,7 @@ void hid_task(void)
 	// Poll every 10ms
 	const uint32_t interval_ms = 10;
 	static uint32_t start_ms = 0;
-	static uint8_t key_codes[6] = {0};
+	static uint8_t key_codes[6+1] = {0};
 
 	if(board_millis() - start_ms < interval_ms)
 	{
@@ -140,7 +140,7 @@ void hid_task(void)
 	start_ms += interval_ms;
 
 	// Check for keys pressed
-	bool const keys_pressed = kbd_scan(key_codes);
+	bool const keys_pressed = kbd_scan_hid(key_codes);
 
 	// Remote wakeup
 	if(tud_suspended() && keys_pressed)

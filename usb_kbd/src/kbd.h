@@ -13,5 +13,5 @@
 #define NUM_MAPSETS		2
 
 void kbd_proc_cmd(const uint8_t* data, uint32_t length);
-bool kbd_scan(uint8_t key_codes[]);
+bool kbd_scan_hid(uint8_t key_codes[]);
 void kbd_init(void);

@@ -4,6 +4,7 @@
 #include "pico/stdlib.h"
 #include "tusb.h"
 #include "board.h"
+#include "usb_hid.h"
 #include "kbd.h"
 
 /**
@@ -18,8 +19,9 @@
  * L --(released)--> R: nothing
  */
 
+#define STR_CMP(a, b)		(strncmp((const char*)a, (char*)b, strlen((const char*)a)) == 0)
 
-#define STR_CMP(a, b)	(strncmp((const char*)a, (char*)b, strlen((const char*)a)) == 0)
+#define KEY_DEF(mod, key)	(((mod) << 8) | key)
 
 typedef enum {
 	RELEASED = 0,
@@ -36,9 +38,20 @@ typedef struct key_status_t
 typedef struct
 {
 	char name[32];
-	uint8_t short_key[NUM_BUTTONS];
-	uint8_t long_key[NUM_BUTTONS];
+	uint16_t short_key[NUM_BUTTONS];
+	uint16_t long_key[NUM_BUTTONS];
 } mapgroup_t;
+
+#define BIT(n) (1U << (n))
+
+#define LCTRL	BIT(0)	///< Left Control
+#define LSHIFT	BIT(1)	///< Left Shift
+#define LALT	BIT(2)	///< Left Alt
+#define LGUI	BIT(3)	///< Left Window
+#define RCTRL	BIT(4)	///< Right Control
+#define RSHIFT	BIT(5)	///< Right Shift
+#define RALT	BIT(6)	///< Right Alt
+#define RGUI	BIT(7)	///< Right Window
 
 
 const static uint8_t g_but_list[NUM_BUTTONS] = {KEY_1_PIN, KEY_2_PIN, KEY_3_PIN, KEY_4_PIN};
@@ -47,31 +60,49 @@ static mapgroup_t ga_groups[NUM_MAPSETS] =
 {
 	{
 		.name = "Default",
-		.short_key = {HID_KEY_A, HID_KEY_B, HID_KEY_C, HID_KEY_D},
-		.long_key = {HID_KEY_V, HID_KEY_W, HID_KEY_X, HID_KEY_Y}
+		.short_key = {
+			KEY_DEF(0, HID_KEY_A),
+			KEY_DEF(0, HID_KEY_B),
+			KEY_DEF(LCTRL, HID_KEY_C),
+			KEY_DEF(0, HID_KEY_D),
+		},
+		.long_key = {
+			KEY_DEF(LCTRL, HID_KEY_V),
+			KEY_DEF(0, HID_KEY_W),
+			KEY_DEF(0, HID_KEY_X),
+			KEY_DEF(0, HID_KEY_Y),
+		}
 	},
 	{
 		.name = "Numpad",
-		.short_key = {HID_KEY_KEYPAD_1, HID_KEY_KEYPAD_2, HID_KEY_KEYPAD_3, HID_KEY_KEYPAD_4},
-		.long_key = {HID_KEY_KEYPAD_7, HID_KEY_KEYPAD_8, HID_KEY_KEYPAD_9, HID_KEY_KEYPAD_0}
+		.short_key = {
+			KEY_DEF(0, HID_KEY_KEYPAD_1),
+			KEY_DEF(0, HID_KEY_KEYPAD_2),
+			KEY_DEF(0, HID_KEY_KEYPAD_3),
+			KEY_DEF(0, HID_KEY_KEYPAD_4)
+		},
+		.long_key = {
+			KEY_DEF(0, HID_KEY_KEYPAD_7),
+			KEY_DEF(0, HID_KEY_KEYPAD_8),
+			KEY_DEF(0, HID_KEY_KEYPAD_9),
+			KEY_DEF(0, HID_KEY_KEYPAD_0)
+		}
 	}
 };
 
 static mapgroup_t* gp_active_group = &ga_groups[0];
 static key_status_t key_status[NUM_BUTTONS] = {0};
 
-bool kbd_scan(uint8_t key_codes[])
+uint16_t kbd_scan()
 {
 	static uint32_t start_ms = 0;
 	const uint32_t interval_ms = 50;
 
 	if(board_millis() - start_ms < interval_ms)
 	{
-		return false; // not enough time
+		return 0; // not enough time
 	}
 	start_ms = board_millis();
-
-	memset(key_codes, 0, 6); // clear key codes
 
 	uint32_t cur_but = 0;
 	for(int i = 0; i < NUM_BUTTONS; i++)
@@ -93,16 +124,14 @@ bool kbd_scan(uint8_t key_codes[])
 			if(!is_pressed)
 			{
 				// short press
-				key_codes[0] = gp_active_group->short_key[i];
 				status->state = RELEASED;
-				return true;
+				return gp_active_group->short_key[i];
 			}
 			else if(board_millis() - status->pressed_time >= LONG_PRESS_TIMEOUT_MS)
 			{
 				// long press
-				key_codes[0] = gp_active_group->long_key[i];
 				status->state = LONG_PRESSED;
-				return true;
+				return gp_active_group->long_key[i];
 			}
 			break;
 			case LONG_PRESSED:
@@ -117,6 +146,19 @@ bool kbd_scan(uint8_t key_codes[])
 		}
 	}
 	// if blink is disabled, send key
+	return 0;
+}
+
+bool kbd_scan_hid(uint8_t key_codes[])
+{
+	uint16_t keycode16 = kbd_scan(&keycode16);
+	if(keycode16 != 0)
+	{
+		memset(key_codes, 0, KEY_CODE_SIZE); // clear key codes
+		key_codes[0] = (uint8_t)((keycode16 >> 8) & 0xFF); // modifier
+		key_codes[1] = (uint8_t)(keycode16 & 0xFF); // key code
+		return true;
+	}
 	return false;
 }
 
