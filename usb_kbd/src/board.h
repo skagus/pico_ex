@@ -15,5 +15,5 @@ enum
 uint32_t board_millis(void);
 void board_led_write(bool state);
 void board_set_led_period(uint32_t interval_ms);
-void board_led_init(void);
+void board_init(void);
 void board_task(void);

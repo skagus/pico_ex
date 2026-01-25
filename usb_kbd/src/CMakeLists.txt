@@ -4,7 +4,6 @@
 add_executable(${PROJECT_NAME}
 	main.c
 	usb_desc.c
-	tud_if.c
 	kbd.c
 	usb_cdc.c
 	usb_hid.c

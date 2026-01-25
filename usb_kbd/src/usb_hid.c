@@ -1,10 +1,66 @@
-#include "board.h"
 #include "tusb.h"
-#include "tud_if.h"
 #include "usb_desc.h"
+#include "board.h"
 #include "kbd.h"
 
-extern uint32_t blink_interval_ms;
+
+// Invoked when sent REPORT successfully to host
+// Application can use this to send the next report
+// Note: For composite reports, report[0] is report ID
+void tud_hid_report_complete_cb(uint8_t instance, uint8_t const* report, uint16_t len)
+{
+	// not implemented, we only send REPORT_ID_KEYBOARD
+	(void)instance;
+	(void)len;
+}
+
+// Invoked when received GET_REPORT control request
+// Application must fill buffer report's content and return its length.
+// Return zero will cause the stack to STALL request
+uint16_t tud_hid_get_report_cb(uint8_t instance, uint8_t report_id, hid_report_type_t report_type, uint8_t* buffer, uint16_t reqlen)
+{
+	// TODO not Implemented
+	(void)instance;
+	(void)report_id;
+	(void)report_type;
+	(void)buffer;
+	(void)reqlen;
+
+	return 0;
+}
+
+
+
+//--------------------------------------------------------------------+
+// Device callbacks
+//--------------------------------------------------------------------+
+
+// Invoked when device is mounted
+void tud_mount_cb(void)
+{
+	board_set_led_period(BLINK_MOUNTED);
+}
+
+// Invoked when device is unmounted
+void tud_umount_cb(void)
+{
+	board_set_led_period(BLINK_NOT_MOUNTED);
+}
+
+// Invoked when usb bus is suspended
+// remote_wakeup_en : if host allow us  to perform remote wakeup
+// Within 7ms, device must draw an average of current less than 2.5 mA from bus
+void tud_suspend_cb(bool remote_wakeup_en)
+{
+	(void)remote_wakeup_en;
+	board_set_led_period(BLINK_SUSPENDED);
+}
+
+// Invoked when usb bus is resumed
+void tud_resume_cb(void)
+{
+	board_set_led_period(BLINK_MOUNTED);
+}
 
 // Invoked when received SET_REPORT control request or
 // received data on OUT endpoint ( Report ID = 0, Type = 0 )
@@ -21,19 +77,17 @@ void tud_hid_set_report_cb(uint8_t instance, uint8_t report_id, hid_report_type_
 			if(bufsize < 1)
 				return;
 
-			uint8_t const kbd_leds = buffer[0];
-
-			if(kbd_leds & KEYBOARD_LED_SCROLLLOCK)
+			if(buffer[0] & KEYBOARD_LED_SCROLLLOCK)
 			{
 				// Capslock On: disable blink, turn led on
-				blink_interval_ms = 0;
+				board_set_led_period(0);
 				board_led_write(true);
 			}
 			else
 			{
 				// Caplocks Off: back to normal blink
 				board_led_write(false);
-				blink_interval_ms = BLINK_MOUNTED;
+				board_set_led_period(BLINK_MOUNTED);
 			}
 		}
 	}

@@ -34,29 +34,14 @@
 #include "usb_desc.h"
 #include "usb_hid.h"
 #include "usb_cdc.h"
-#include "tud_if.h"
 #include "kbd.h"
 #include "board.h"
-
-/**
- * Key state transition.
- * - Released: do nothing
- * - Pressed: send key code once
- * - Long Pressed: do nothing
- * 
- * R --(but pushed)--> P: nothing.
- * P --(released)--> R: Short Pressed (short key send)
- * P --(timeout)--> L: Long Pressed (long key send)
- */
-
-
 
 /*------------- MAIN -------------*/
 int main(void)
 {
+	board_init();
 	tusb_init();
-
-	board_led_init();
 	kbd_init();
 	cdc_init();	
 

@@ -12,7 +12,7 @@ void board_set_led_period(uint32_t interval_ms)
 	blink_interval_ms = interval_ms;
 }
 
-void board_led_init(void)
+void board_init(void)
 {
 	gpio_init(LED_PIN); // Initialize the GPIO pin
 	gpio_set_dir(LED_PIN, GPIO_OUT); // Set direction to output

@@ -6,6 +6,19 @@
 #include "board.h"
 #include "kbd.h"
 
+/**
+ * Key state transition.
+ * - R:eleased
+ * - P:ressed
+ * - L:ong Pressed
+ *
+ * R --(but pushed)--> P: nothing
+ * P --(released)--> R: Short key send
+ * P --(timeout)--> L: Long key send
+ * L --(released)--> R: nothing
+ */
+
+
 #define STR_CMP(a, b)	(strncmp((const char*)a, (char*)b, strlen((const char*)a)) == 0)
 
 typedef enum {

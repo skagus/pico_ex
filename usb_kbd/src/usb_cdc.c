@@ -1,8 +1,7 @@
 
-#include "tusb.h"
 #include "pico/stdio/driver.h"
+#include "tusb.h"
 #include "kbd.h"
-
 
 
 // 1. stdio 출력을 담당할 함수 (printf -> CDC)
@@ -29,7 +28,8 @@ static int stdio_usb_in_chars(char* buf, int length)
 }
 
 // 3. stdio 드라이버 구조체 정의
-stdio_driver_t stdio_usb_custom = {
+stdio_driver_t stdio_usb_custom = 
+{
 	.out_chars = stdio_usb_out_chars,
 	.in_chars = stdio_usb_in_chars,
 #if PICO_STDIO_ENABLE_CRLF_SUPPORT
