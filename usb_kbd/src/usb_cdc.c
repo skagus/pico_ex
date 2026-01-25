@@ -37,6 +37,9 @@ stdio_driver_t stdio_usb_custom =
 #endif
 };
 
+void putsn(char* s, int len){
+	while(len-- > 0) putchar(*s++);
+}
 
 #define BUF_SIZE 64
 void cdc_task(void)
@@ -50,6 +53,8 @@ void cdc_task(void)
 		if(tud_cdc_available())
 		{
 			uint32_t count = tud_cdc_read(buf + len, BUF_SIZE - len);
+			
+			putsn(buf + len, count);
 			len += count;
 			if(buf[len - 1] == '\n' || len >= (BUF_SIZE - 1))
 			{

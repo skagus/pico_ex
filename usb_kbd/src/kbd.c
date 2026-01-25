@@ -206,32 +206,37 @@ void kbd_proc_cmd(const uint8_t* data, uint32_t length)
 			return;
 		}
 		gp_active_group = &ga_groups[grp];
-		printf("Activated Group %d\n", grp);
+		printf("Group Activating %d\n", grp);
 	}
 	else if(STR_CMP("list", data))
 	{
-		printf("Available Mapping Groups:\n");
+		printf("Defined Mapping\n");
+		tud_task();
 		for(int i = 0; i < NUM_MAPSETS; i++)
 		{
 			printf("Group %d: %s\n", i, ga_groups[i].name);
 			printf("  Short Keys: ");
+			tud_task();
 			for(int j = 0; j < NUM_BUTTONS; j++)
 			{
-				printf("%d ", ga_groups[i].short_key[j]);
+				printf("%4X ", ga_groups[i].short_key[j]);
 			}
 			tud_task();
 			printf("\n");
 			printf("  Long Keys:  ");
+			tud_task();
 			for(int j = 0; j < NUM_BUTTONS; j++)
 			{
-				printf("%d ", ga_groups[i].long_key[j]);
+				printf("%4X ", ga_groups[i].long_key[j]);
 			}
 			printf("\n");
 		}
 	}
 	else
 	{
-		printf("set <grp> [s|l] <idx> <val> : Set [short|long] key mapping at index <idx> group <grp> to HID code <val>\n");
+		printf("set <grp> [s|l] <idx> <val> : Set [short|long] key mapping ");
+		tud_task();
+		printf("at index <idx> group <grp> to HID code <val>\n");
 	}
 }
 
