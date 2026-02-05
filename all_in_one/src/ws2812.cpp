@@ -7,7 +7,7 @@
 #include "cli.h"
 #include "ws2812.h"
 
-static PIO pio;
+static PIO g_pio;
 static int g_sm;
 const float pi = 3.14159f;
 
@@ -84,7 +84,7 @@ void ws_Cmd(uint8_t argc, char* argv[])
 		channel_config_set_ring(&c, false, 12);
 
 		dma_channel_configure(dma_chan, &c,
-							  &pio->txf[g_sm],      // 목적지: PIO FIFO
+							  &g_pio->txf[g_sm],      // 목적지: PIO FIFO
 							  pixel_values,               // 소스: 나중에 설정 (전송 시작 시)
 							  TOTAL_STREAM_LEN * 10,         // 전송 횟수 (32비트 단위)
 							  true);               // 시작
@@ -93,15 +93,15 @@ void ws_Cmd(uint8_t argc, char* argv[])
 
 void WS_SetColor(uint32_t color)
 {
-	pio->txf[g_sm] = color << 8; // MAKE_RGB(color, 0x0, 0x0);
+	g_pio->txf[g_sm] = color << 8; // MAKE_RGB(color, 0x0, 0x0);
 }
 
 void WS_Init(void)
 {
-	pio = pio0;
-	g_sm = 0;
-	uint offset = pio_add_program(pio, &ws2812_program);
-	ws2812_pio_init(pio, g_sm, offset, PICO_WS2812_PIN, 800000);
+	g_pio = pio0;
+	g_sm = pio_claim_unused_sm(g_pio, true);
+	uint offset = pio_add_program(g_pio, &ws2812_program);
+	ws2812_pio_init(g_pio, g_sm, offset, PICO_WS2812_PIN, 800000);
 
 	_setPixels();
 	CLI_Register("ws", ws_Cmd);

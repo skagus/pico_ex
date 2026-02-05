@@ -7,8 +7,8 @@
 
 #define LED_PIN (1) 
 
-#define PIO_INST pio0
-uint g_sm;
+static PIO g_pio;
+static int g_sm;
 
 
 void led_Cmd(uint8_t argc, char* argv[])
@@ -33,7 +33,7 @@ void led_Cmd(uint8_t argc, char* argv[])
 
 void LED_Blink(uint32_t interval_ms)
 {
-	pio_sm_put_blocking(PIO_INST, g_sm, interval_ms - 5);
+	pio_sm_put_blocking(g_pio, g_sm, interval_ms - 5);
 }
 
 
@@ -43,9 +43,10 @@ void LED_Init(void)
 	printf("Blink start, sys clock: %u Hz, %u\n", freq, SYS_CLK_MHZ);
 
 	// 2. PIO 프로그램 로드 및 상태 머신 설정
-	g_sm = pio_claim_unused_sm(PIO_INST, true);
-	uint offset = pio_add_program(PIO_INST, &blink_program);
-	led_pio_init(PIO_INST, g_sm, offset, LED_PIN);
+	g_pio = pio0;
+	g_sm = pio_claim_unused_sm(g_pio, true);
+	uint offset = pio_add_program(g_pio, &blink_program);
+	led_pio_init(g_pio, g_sm, offset, LED_PIN);
 
 	CLI_Register("led", led_Cmd);
 }
