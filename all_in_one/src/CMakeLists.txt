@@ -9,6 +9,7 @@ add_executable(${PROJECT_NAME}
 	led.cpp
 	cap_meter.cpp
 	ws2812.cpp
+	pwm.cpp
 )
 
 # Enable USB stdio
@@ -30,6 +31,7 @@ target_link_libraries(${PROJECT_NAME}
 	hardware_clocks
 	hardware_adc
 	hardware_dma
+	hardware_pwm
 )
 
 # Enable USB serial output

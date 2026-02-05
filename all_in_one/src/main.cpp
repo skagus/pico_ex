@@ -5,6 +5,7 @@
 #include "led.h"
 #include "cap_meter.h"
 #include "ws2812.h"
+#include "pwm.h"
 
 Cbf g_CbfTick;
 CliHandler g_CliHandle;
@@ -37,7 +38,8 @@ int main()
 	LED_Init();
 	CAPMETER_Init();
 	WS_Init();
-	
+	PWM_Init();
+
 	while(true)
 	{
 		int c = getchar_timeout_us(0);
