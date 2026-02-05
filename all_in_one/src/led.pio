@@ -22,7 +22,7 @@ lp2:
 ; total 8 + (2 * (in + 1)) cycles
 
 % c-sdk {
-static inline void blink_program_init(PIO pio, uint sm, uint offset, uint pin)
+static inline void led_pio_init(PIO pio, uint sm, uint offset, uint pin)
 {
    pio_sm_config c = blink_program_get_default_config(offset);
    sm_config_set_sideset_pins(&c, pin);

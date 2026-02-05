@@ -5,7 +5,7 @@ cmake_minimum_required(VERSION 3.13)
 # You can get the SDK with: git clone https://github.com/raspberrypi/pico-sdk.git
 include($ENV{PICO_SDK_PATH}/pico_sdk_init.cmake)
 
-project(pio_blink_project C CXX ASM)
+project(allinone C CXX ASM)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 17)
