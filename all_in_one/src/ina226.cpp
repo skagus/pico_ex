@@ -6,7 +6,7 @@
 
 
 
-uint8_t g_addr;
+static uint8_t g_addr;
 // 16비트 데이터를 빅 엔디언으로 쓰고 읽기 위한 함수
 void ina226_write_reg(uint8_t reg, uint16_t value)
 {

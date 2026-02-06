@@ -7,6 +7,7 @@
 #include "ws2812.h"
 #include "pwm.h"
 #include "ina226.h"
+#include "ssd1306.h"
 
 Cbf g_CbfTick;
 CliHandler g_CliHandle;
@@ -41,7 +42,8 @@ int main()
 	WS_Init();
 	PWM_Init();
 	INA226_Init();
-	
+	SSD1306_Init(128, 32);
+
 	while(true)
 	{
 		int c = getchar_timeout_us(0);

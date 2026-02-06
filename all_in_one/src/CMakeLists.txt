@@ -11,6 +11,7 @@ add_executable(${PROJECT_NAME}
 	ws2812.cpp
 	pwm.cpp
 	ina226.cpp
+	ssd1306.cpp
 )
 
 # Enable USB stdio
