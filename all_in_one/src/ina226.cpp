@@ -1,9 +1,7 @@
 #include <stdio.h>
-#include "hardware/i2c.h"
-#include "hardware/gpio.h"
+#include "hw_cfg.h"
 #include "cli.h"
 #include "ina226.h"
-
 
 
 static uint8_t g_addr;
@@ -43,21 +41,10 @@ void ina226_Cmd(uint8_t argc, char* argv[])
 	printf("Current  %5d, %6.2f mA\n", curr_raw, curr_mA);
 }
 
-void _i2c_init()
-{
-	// I2C 초기화 (400kHz)
-	i2c_init(I2C_PORT, 40 * 1000);
-
-	gpio_set_function(SDA_PIN, GPIO_FUNC_I2C);
-	gpio_set_function(SCL_PIN, GPIO_FUNC_I2C);
-	gpio_pull_up(SDA_PIN);
-	gpio_pull_up(SCL_PIN);
-}
 
 void INA226_Init()
 {
 	g_addr = ADDR_INA226;
-	_i2c_init();
 	
 	// INA226 설정: 평균 16회 측정, 컨버전 타임 1.1ms
 	// [11:9] AVG=16 (b010), 

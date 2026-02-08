@@ -1,12 +1,7 @@
 #pragma once
 #include <stdint.h>
 
-#define I2C_PORT i2c1
-#define SDA_PIN 6
-#define SCL_PIN 7
-
 #define ADDR_INA226 0x40
-
 
 // INA226 레지스터 주소
 #define REG_CONFIG	0x00

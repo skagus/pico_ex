@@ -1,6 +1,5 @@
 #include <stdio.h>
 #include "hardware/pio.h"
-#include "hardware/clocks.h"
 #include "led.pio.h" 
 #include "cli.h"
 #include "led.h"
@@ -39,9 +38,6 @@ void LED_Blink(uint32_t interval_ms)
 
 void LED_Init(void)
 {
-	uint32_t freq = clock_get_hz(clk_sys);
-	printf("Blink start, sys clock: %u Hz, %u\n", freq, SYS_CLK_MHZ);
-
 	// 2. PIO 프로그램 로드 및 상태 머신 설정
 	g_pio = pio0;
 	g_sm = pio_claim_unused_sm(g_pio, true);

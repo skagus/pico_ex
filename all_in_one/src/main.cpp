@@ -1,5 +1,8 @@
 #include <stdio.h>
 #include "pico/stdlib.h"
+#include "hardware/clocks.h"
+
+#include "hw_cfg.h"
 #include "sched.h"
 #include "cli.h"
 #include "led.h"
@@ -24,10 +27,13 @@ bool repeating_timer_callback(struct repeating_timer* t)
 int main()
 {
 	static struct repeating_timer timer;
-
+	hw_cfg();
 	// 1. 기본 설정
 	stdio_init_all();
 	sleep_ms(1000);
+
+	uint32_t freq = clock_get_hz(clk_sys);
+	printf("APP start, clock: %u Hz(%u MHz)\n", freq, SYS_CLK_MHZ);
 
 	g_CbfTick = Sched_Init();
 

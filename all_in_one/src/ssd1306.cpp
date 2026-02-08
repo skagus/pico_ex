@@ -1,10 +1,8 @@
 #include <string.h>
 #include <stdio.h>
-#include "hardware/i2c.h"
+#include "hw_cfg.h"
 #include "cli.h"
 #include "ssd1306.h"
-
-
 
 static uint8_t g_addr = 0x3C; // SSD1306 I2C 주소 (일반적으로 0x3C 또는 0x3D)
 static uint8_t g_width;
@@ -68,6 +66,15 @@ void ssd1306_Cmd(uint8_t argc, char* argv[])
 			}
 			SSD1306_Powermode((PMode)mode);
 			printf("SSD1306 Power mode set to %u\n", mode);
+		}
+		else if(SAME_STR("pixel", argv[1]) && argc >= 5)
+		{
+			uint8_t x = (uint8_t)CLI_GetInt(argv[2]);
+			uint8_t y = (uint8_t)CLI_GetInt(argv[3]);
+			bool color = (bool)CLI_GetInt(argv[4]);
+			SSD1306_PlotPixel(x, y, color);
+			SSD1306_Update();
+			printf("SSD1306 Pixel plotted at (%u, %u) with color %u\n", x, y, color);
 		}
 	}
 	else if(argc == 2)
@@ -168,5 +175,23 @@ void SSD1306_Init(uint8_t width, uint8_t height)
 	memset(buf, 0xff, width * height / 8);
 	SSD1306_Update();
 	CLI_Register("ssd", ssd1306_Cmd);
+}
+
+void SSD1306_PlotPixel(uint8_t x, uint8_t y, bool color)
+{
+	if(x >= g_width || y >= g_height) return;
+
+	uint8_t* buf = SSD1306_GetFB();
+	uint16_t byteIndex = x + (y / 8) * g_width;
+	uint8_t bitIndex = y % 8;
+
+	if(color)
+	{
+		buf[byteIndex] |= (1 << bitIndex);
+	}
+	else
+	{
+		buf[byteIndex] &= ~(1 << bitIndex);
+	}
 }
 

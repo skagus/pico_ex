@@ -4,6 +4,7 @@
 # Create our executable
 add_executable(${PROJECT_NAME}
 	main.cpp
+	hw_cfg.cpp
 	sched.cpp
 	cli.cpp
 	led.cpp

@@ -2,10 +2,6 @@
 
 #include <stdint.h>
 
-#define I2C_PORT i2c1
-#define SDA_PIN 6
-#define SCL_PIN 7
-
 typedef enum{
 	ACTIVE = 0,
 	SLEEP,
@@ -70,3 +66,4 @@ uint8_t* SSD1306_GetFB();
 void SSD1306_Update();
 void SSD1306_Contrast(uint8_t contrast);
 void SSD1306_Powermode(PMode mode);
+void SSD1306_PlotPixel(uint8_t x, uint8_t y, bool color);
