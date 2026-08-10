@@ -151,7 +151,7 @@ uint16_t kbd_scan()
 
 bool kbd_scan_hid(uint8_t key_codes[])
 {
-	uint16_t keycode16 = kbd_scan(&keycode16);
+	uint16_t keycode16 = kbd_scan();
 	if(keycode16 != 0)
 	{
 		memset(key_codes, 0, KEY_CODE_SIZE); // clear key codes
@@ -234,9 +234,10 @@ void kbd_proc_cmd(const uint8_t* data, uint32_t length)
 	}
 	else
 	{
+		int size = sizeof(ga_groups);
 		printf("set <grp> [s|l] <idx> <val> : Set [short|long] key mapping ");
 		tud_task();
-		printf("at index <idx> group <grp> to HID code <val>\n");
+		printf("at index <idx> group <grp> to HID code <val> %d\n", size);
 	}
 }
 

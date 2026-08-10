@@ -31,8 +31,7 @@ pico_add_extra_outputs(${PROJECT_NAME})
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -g")
 
 add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-    COMMAND arm-none-eabi-objdump -S -d 
-            ${PROJECT_BINARY_DIR}/src/${PROJECT_NAME}.elf 
-            > ${PROJECT_BINARY_DIR}/src/${PROJECT_NAME}.lst
-    COMMENT "Generating disassembly file with source code..."
+    COMMAND ${CMAKE_OBJDUMP} -S -d $<TARGET_FILE:${PROJECT_NAME}> > ${PROJECT_NAME}.lst
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    COMMENT "Generating disassembly file (.lst) with source code..."
 )

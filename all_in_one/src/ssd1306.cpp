@@ -155,7 +155,7 @@ const uint8_t g_init_cmds[] = {
 	0xA1,             // Segment re-map (좌우 반전 시 0xA0)
 	0xC8,             // COM scan direction (상하 반전 시 0xC0)
 	0xDA, 0x02,       // COM pins hardware config ★128x32는 0x02
-	0x81, 0x8F,       // Contrast (0xCF는 너무 밝을 수 있어 0x8F 권장)
+	0x81, 0x7F,       // Contrast (0xCF는 너무 밝을 수 있어 0x8F 이하 권장)
 	0xD9, 0xF1,       // Pre-charge period
 	0xDB, 0x40,       // VCOMH deselect level
 	0xA4,             // Resume to RAM content
@@ -172,7 +172,10 @@ void SSD1306_Init(uint8_t width, uint8_t height)
 	_WriteCmd((uint8_t*)g_init_cmds, sizeof(g_init_cmds));
 
 	uint8_t* buf = SSD1306_GetFB();
-	memset(buf, 0xff, width * height / 8);
+	for(int i = 0; i< width * height / 8; i++)
+	{
+		buf[i] = i & 0xFF; // 초기 패턴 (0, 1, 2, ..., 255 반복)
+	}
 	SSD1306_Update();
 	CLI_Register("ssd", ssd1306_Cmd);
 }
