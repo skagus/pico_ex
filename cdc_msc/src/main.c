@@ -26,7 +26,9 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-
+#include "hardware/sync.h"
+#include "hardware/structs/ioqspi.h"
+#include "hardware/structs/sio.h"
 #include "pico/stdlib.h"
 #include "pico/time.h"
 #include "tusb_config.h"
@@ -72,9 +74,45 @@ static uint32_t blink_interval_ms = BLINK_NOT_MOUNTED;
 void led_blinking_task(void);
 void cdc_task(void);
 
+
+bool __no_inline_not_in_flash_func(read_bootsel_button)()
+{
+  const uint CS_PIN_INDEX = 1; // QSPI에서 CS 핀 번호는 1번입니다.
+
+  uint32_t flags = save_and_disable_interrupts();
+
+  uint32_t io_bank_bck = ioqspi_hw->io[CS_PIN_INDEX].ctrl;
+  ioqspi_hw->io[CS_PIN_INDEX].ctrl = (GPIO_FUNC_SIO << IO_QSPI_GPIO_QSPI_SS_CTRL_FUNCSEL_LSB);
+  bool button_pressed = !(sio_hw->gpio_hi_in & (1u << CS_PIN_INDEX));
+  ioqspi_hw->io[CS_PIN_INDEX].ctrl = io_bank_bck;
+
+  restore_interrupts(flags);
+
+  return button_pressed;
+}
+
+void wait_boot_sel(void)
+{
+  // wait for BOOTSEL button to be pressed
+  while (1)
+  {
+    if(!read_bootsel_button()) break;
+    sleep_ms(10);
+  }
+
+  // wait for BOOTSEL button to be released
+  while (1)
+  {
+    if(read_bootsel_button()) break;
+    sleep_ms(10);
+  }
+}
+
 /*------------- MAIN -------------*/
 int main(void)
 {
+  wait_boot_sel();
+
   board_init();
 
   // init device stack on configured roothub port

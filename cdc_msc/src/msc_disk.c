@@ -27,8 +27,6 @@
 #include "hardware/flash.h"
 #include "hardware/sync.h"
 
- // whether host does safe-eject
-static bool ejected = false;
 
 #define DISK_BLOCK_NUM      (3072)
 #define DISK_BLOCK_SIZE     (512)
@@ -36,6 +34,15 @@ static bool ejected = false;
 #ifndef FLASH_TARGET_OFFSET
 #define FLASH_TARGET_OFFSET  ((PICO_FLASH_SIZE_BYTES - (DISK_BLOCK_NUM * DISK_BLOCK_SIZE)) & ~(FLASH_SECTOR_SIZE - 1))
 #endif
+
+#define LOG(...)      printf(__VA_ARGS__)
+
+ // whether host does safe-eject
+static bool ejected = false;
+// 4KB 섹터 단위로 읽고/쓰는 작업을 안전하게 처리하기 위한 캐시
+static uint8_t sector_cache[FLASH_SECTOR_SIZE];
+static int32_t cached_sector_addr = -1;
+static uint8_t dirty_bitmask = 0;
 
 // Invoked when received SCSI_CMD_INQUIRY
 // Application fill vendor id, product id and revision with string up to 8, 16, 4 characters respectively
@@ -102,6 +109,20 @@ bool tud_msc_start_stop_cb(uint8_t lun, uint8_t power_condition, bool start, boo
   return true;
 }
 
+bool flash_read_cache(uint32_t lba, uint32_t offset, uint8_t* buffer, uint32_t size)
+{
+  uint32_t addr = FLASH_TARGET_OFFSET + (lba * DISK_BLOCK_SIZE) + offset;
+  uint32_t sector_start_addr = addr & ~(FLASH_SECTOR_SIZE - 1);
+  uint32_t offset_in_sector = addr - sector_start_addr;
+
+  if(cached_sector_addr == sector_start_addr)
+  {
+    memcpy(buffer, sector_cache + offset_in_sector, size);
+    return true;
+  }
+  return false;
+}
+
 // Callback invoked when received READ10 command.
 // Copy disk's data to buffer (up to bufsize) and return number of copied bytes.
 int32_t tud_msc_read10_cb(uint8_t lun, uint32_t lba, uint32_t offset, void* buffer, uint32_t bufsize)
@@ -112,8 +133,11 @@ int32_t tud_msc_read10_cb(uint8_t lun, uint32_t lba, uint32_t offset, void* buff
   if (offset > DISK_BLOCK_SIZE) return -1;
   if (bufsize > (DISK_BLOCK_SIZE - offset)) return -1;
 
-  uint8_t const* flash_target_contents = (const uint8_t*)(XIP_BASE + FLASH_TARGET_OFFSET + (lba * DISK_BLOCK_SIZE) + offset);
-  memcpy(buffer, flash_target_contents, bufsize);
+  if(!flash_read_cache(lba, offset, buffer, bufsize))
+  {
+    uint8_t const* flash_target_contents = (const uint8_t*)(XIP_BASE + FLASH_TARGET_OFFSET + (lba * DISK_BLOCK_SIZE) + offset);
+    memcpy(buffer, flash_target_contents, bufsize);
+  }
   return (int32_t)bufsize;
 }
 
@@ -122,11 +146,6 @@ bool tud_msc_is_writable_cb(uint8_t lun)
   (void) lun;
   return true;
 }
-
-// 4KB 섹터 단위로 읽고/쓰는 작업을 안전하게 처리하기 위한 캐시
-static uint8_t sector_cache[FLASH_SECTOR_SIZE];
-static int32_t cached_sector_addr = -1;
-static uint8_t dirty_bitmask = 0;
 
 static bool flash_disk_range_valid(uint32_t lba, uint32_t offset, uint32_t bufsize)
 {
@@ -147,6 +166,7 @@ void flash_disk_flush_cache(void)
 
   cached_sector_addr = -1;
   dirty_bitmask = 0;
+  LOG("F\n");
 }
 
 // 플래시 쓰기 함수는 무조건 RAM에서 실행
@@ -160,20 +180,34 @@ int32_t __not_in_flash_func(tud_msc_write10_cb)(uint8_t lun, uint32_t lba, uint3
   uint32_t sector_start_addr = write_addr & ~(FLASH_SECTOR_SIZE - 1);
   uint32_t offset_in_sector = write_addr - sector_start_addr;
 
+  if(bufsize != DISK_BLOCK_SIZE)
+  {
+    LOG("W %X o %X sz %d\n", lba, offset, bufsize);
+  }
+  else
+  {
+    LOG("W");
+  }
+
   if (cached_sector_addr != -1 && cached_sector_addr != (int32_t) sector_start_addr)
   {
     flash_disk_flush_cache();
   }
 
-  if (cached_sector_addr == -1)
+  if (cached_sector_addr == -1) // 캐시가 비어있으면 섹터를 읽어서 캐시에 저장
   {
     cached_sector_addr = (int32_t) sector_start_addr;
     memcpy(sector_cache, (const void*)(XIP_BASE + sector_start_addr), FLASH_SECTOR_SIZE);
   }
-
   memcpy(sector_cache + offset_in_sector, buffer, bufsize);
-  uint8_t bm_mask = (1 << (bufsize / DISK_BLOCK_SIZE)) - 1;
-  dirty_bitmask |= (bm_mask << (offset_in_sector / DISK_BLOCK_SIZE)); // 256바이트 단위로 dirty 비트 설정
+
+  uint32_t block_index = offset_in_sector / DISK_BLOCK_SIZE;
+  uint32_t block_count = (bufsize + DISK_BLOCK_SIZE - 1) / DISK_BLOCK_SIZE;
+  for(uint32_t i = 0; i < block_count; i++)
+  {
+    dirty_bitmask |= (1u << (block_index + i));
+  }
+
   if(dirty_bitmask == FULL_SECT_BITMAP) // 4KB 섹터가 모두 dirty 상태이면 바로 플래시에 기록
   {
     flash_disk_flush_cache();
