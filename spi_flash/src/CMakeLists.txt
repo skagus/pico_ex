@@ -9,10 +9,10 @@ add_executable(${PROJECT_NAME}
 )
 
 # Enable USB stdio
-pico_enable_stdio_usb(pio_blink_project 1)
+pico_enable_stdio_usb(spi_flash 1)
 
 # Disable UART stdio
-pico_enable_stdio_uart(pio_blink_project 0)
+pico_enable_stdio_uart(spi_flash 0)
 
 # Generate the PIO header file from our .pio file and add it to our executable
 pico_generate_pio_header(${PROJECT_NAME}

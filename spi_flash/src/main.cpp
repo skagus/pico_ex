@@ -51,6 +51,22 @@ int str_token(char* tokens[], char* str, int max_tokens)
 	return i;
 }
 
+void my_gets(char* buf, int len)
+{
+	uint8_t line_ptr = 0;
+	while(true)
+	{
+		uint32_t c = getchar_timeout_us(0);
+		if(c == PICO_ERROR_TIMEOUT) continue;
+		putchar(c);
+		if(c == '\n') break;
+		if(c == '\r') break;
+		if(line_ptr < len-1) buf[line_ptr++] = (uint8_t)c;
+		else break;
+	}
+	buf[line_ptr] = 0;
+}
+
 void spi_peri()
 {
 	my_spi_t real_spi_hw;
@@ -67,8 +83,8 @@ void spi_peri()
 	char* tokens[MAX_TOKENS];
 	while(true)
 	{
-		gets(line_buf);
-		printf("You entered: %s\n", line_buf);
+//		gets(line_buf);
+		my_gets(line_buf, 32);
 		int num_tokens = str_token(tokens, line_buf, MAX_TOKENS);
 		if(num_tokens < 1) continue;
 
@@ -144,7 +160,7 @@ void spi_peri()
 		}
 		else
 		{
-			printf("Unknown command\n\n");
+			printf("Unknown command: %s\n\n", line_buf);
 			printf("pgm 0xADDR SIZE [0xKEY]\nread 0xADDR SIZE\nerase 0xADDR SIZE\n");
 			printf("id\nstatus\nwsta 0xSTATUS\n");
 		}
