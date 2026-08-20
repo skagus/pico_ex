@@ -6,20 +6,35 @@
 #include "spi_hw.h"
 #include "flash.h"
 
+#define EN_GLOBAL_UNPROT	(1)
+
+#if EN_GLOBAL_UNPROT
+void _global_unprot(my_spi_t* spi_hw)
+{
+	flash_wren(spi_hw); // Write Enable
+	uint8_t aCmd[2] = {0x01, 0x00}; // Global Unprotect
+	spi_hw_write_read(spi_hw, aCmd, 2, nullptr, 0);
+}
+#endif
 
 void flash_unprot(my_spi_t* spi_hw, uint32_t addr)
 {
+#if !(EN_GLOBAL_UNPROT)
 	flash_wren(spi_hw); // Write Enable
 	uint8_t aCmd[4] = {0x39, }; // Global Unprotect
 	aCmd[1] = (uint8_t)(addr >> 16);
 	aCmd[2] = (uint8_t)(addr >> 8);
 	aCmd[3] = (uint8_t)(addr);
 	spi_hw_write_read(spi_hw, aCmd, 4, nullptr, 0);
+#endif
 }
 
 void flash_init(my_spi_t* spi_hw)
 {
 	spi_hw_init(spi_hw);
+#if EN_GLOBAL_UNPROT
+	_global_unprot(spi_hw);
+#endif
 }
 
 void flash_wren(my_spi_t* spi_hw)
