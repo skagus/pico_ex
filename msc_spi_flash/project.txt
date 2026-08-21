@@ -1,0 +1,13 @@
+XIP 가 아닌 SPI bus에 부착된 NOR SPI Flash를 이용하여, USB Mass storage를 구현한다.
+
+SPI flash의 제어는 hardware_spi 모듈을 사용하며, pin 연결은 다음과 같다.
+    CS_PIN		(1)
+    SCK_PIN		(2)
+    MOSI_PIN	(3)
+    MISO_PIN	(4)
+
+SPI flash의 접근은 SPI DMA로 수행한다. 
+
+SPI model은 25DF321 (ISSI 4MB SPI Flash)를 사용한다.
+하지만 추후에 변경 가능성을 고려해서, JEDEC ID 등의 정보를 이용하여, flash device를 판단하는 로직을 추가한다.
+
