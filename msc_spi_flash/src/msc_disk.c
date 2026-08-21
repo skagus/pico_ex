@@ -81,7 +81,7 @@ void msc_disk_task(void)
     {
         case FLUSH_STATE_IDLE:
         {
-            // 플래시 기록 대기 중인 버퍼 찾기 (현재 active가 아닌 버퍼 우선 확인)
+            // 플래시 기록 대기 중인 버퍼 찾기
             int target = -1;
             for (int i = 0; i < 2; i++)
             {
@@ -103,6 +103,22 @@ void msc_disk_task(void)
 
         case FLUSH_STATE_ERASE_START:
         {
+            // [지연 읽기 및 병합]: 4KB가 전부 채워지지 않은 부분 쓰기인 경우,
+            // 호스트가 수정하지 않은 빈 블록만 원본 플래시에서 읽어와 채워 넣음(Merge)
+            if (buffers[flush_idx].dirty_mask != FULL_SECT_BITMAP)
+            {
+                for (int b = 0; b < BLOCKS_PER_SECTOR; b++)
+                {
+                    if (!(buffers[flush_idx].dirty_mask & (1u << b)))
+                    {
+                        uint32_t block_addr = (uint32_t)buffers[flush_idx].sector_addr + (b * DISK_BLOCK_SIZE);
+                        spi_flash_read(block_addr, buffers[flush_idx].data + (b * DISK_BLOCK_SIZE), DISK_BLOCK_SIZE);
+                    }
+                }
+                buffers[flush_idx].dirty_mask = FULL_SECT_BITMAP;
+            }
+
+            // 비동기 4KB 섹터 Erase 시작 (논블로킹)
             spi_flash_sector_erase_4k_async((uint32_t)buffers[flush_idx].sector_addr);
             flush_state = FLUSH_STATE_ERASE_WAIT;
             break;
@@ -142,7 +158,7 @@ void msc_disk_task(void)
             if (!spi_flash_is_busy())
             {
                 flush_page_idx++;
-                if (flush_page_idx < (SPI_FLASH_SECTOR_SIZE / SPI_FLASH_PAGE_SIZE)) // 16개 페이지
+                if (flush_page_idx < (SPI_FLASH_SECTOR_SIZE / SPI_FLASH_PAGE_SIZE)) // 16개 페이지 (4KB)
                 {
                     flush_state = FLUSH_STATE_PAGE_START;
                 }
@@ -272,16 +288,17 @@ int32_t tud_msc_read10_cb(uint8_t lun, uint32_t lba, uint32_t offset, void* buff
   uint32_t addr = (lba * DISK_BLOCK_SIZE) + offset;
   uint32_t sector_start_addr = addr & ~(SPI_FLASH_SECTOR_SIZE - 1);
   uint32_t offset_in_sector = addr - sector_start_addr;
+  uint32_t block_index = offset_in_sector / DISK_BLOCK_SIZE;
 
   int hit_idx = find_cached_buffer(sector_start_addr);
-  if (hit_idx >= 0)
+  // 캐시 버퍼에 존재하고 해당 블록이 수정(더티)된 상태인 경우 버퍼에서 즉시 반환
+  if (hit_idx >= 0 && (buffers[hit_idx].dirty_mask & (1u << block_index)))
   {
-    // 캐시 히트: 버퍼 0 또는 1에서 즉시 복사
     memcpy(buffer, buffers[hit_idx].data + offset_in_sector, bufsize);
   }
   else
   {
-    // 캐시 미스: SPI Flash에서 DMA 읽기 (spi_flash_read 내부에서 Busy 대기 처리 포함)
+    // 캐시 미스이거나 해당 블록이 아직 쓰이지 않은 상태이면 SPI Flash에서 읽기
     spi_flash_read(addr, (uint8_t*)buffer, bufsize);
   }
 
@@ -332,11 +349,7 @@ int32_t tud_msc_write10_cb(uint8_t lun, uint32_t lba, uint32_t offset, uint8_t* 
     buffers[active_idx].dirty_mask = 0;
     buffers[active_idx].state = BUF_STATE_ACTIVE;
 
-    // 만약 4KB 전체 쓰기가 아닌 부분 쓰기라면 기존 섹터 데이터를 미리 로드
-    if (bufsize != SPI_FLASH_SECTOR_SIZE)
-    {
-        spi_flash_read(sector_start_addr, buffers[active_idx].data, SPI_FLASH_SECTOR_SIZE);
-    }
+    // [지연 읽기]: 새 섹터 할당 시 플래시에서 읽어오지 않음 (호스트 데이터 바로 수신)
   }
 
   // 버퍼에 데이터 복사
@@ -356,7 +369,7 @@ int32_t tud_msc_write10_cb(uint8_t lun, uint32_t lba, uint32_t offset, uint8_t* 
     buffers[active_idx].state = BUF_STATE_DIRTY_PENDING;
     msc_disk_task(); // 즉시 상태 머신 1회 구동하여 Erase/PGM 트리거
 
-    // 다음 쓰기를 위해 미리 반대편 버퍼로 스왑 준비 (단, 상대편이 플러시 중이면 다음 쓰기 시작 시점에 wait_buffer_free)
+    // 다음 쓰기를 위해 미리 반대편 버퍼로 스왑 준비
     int next_idx = 1 - active_idx;
     active_idx = next_idx;
   }
