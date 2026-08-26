@@ -1,0 +1,22 @@
+ST7735s LCD 의 동작확인을 위한 Project
+
+H/W 구성
+- CPU : Raspberry Pi Pico (rp2040)
+- LCD    : ST7735s based color LCD Module
+    - Pin 구성은 아래와 같다. 
+        - VCC  -> 3V3
+        - GND  -> GND
+        - CS   -> GP1
+        - SCL  -> GP2
+        - SDA  -> GP3
+        - DC   -> GP4
+        - RES  -> GP5
+        - BL   -> GP6
+
+- 동작 사항
+  - 전원 ON 시 화면 초기화 
+  - 초기화 완료 후 R, G, B 반복, 색깔 변경 간격은 1sec, 무한히 진행함.
+
+- 빌드 환경
+  - 환경 설정 방법 : C:\Apps\PiPicoSDK151\pico-env.cmd 실행.
+
