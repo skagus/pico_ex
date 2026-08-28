@@ -20,13 +20,13 @@
 #define PIN_BL          6   // GP6 - Backlight
 
 // ---------------------------------------------------------------------------
-// LCD Resolution & Offsets (128x128 1.44" 패널 기준)
+// LCD Resolution & Offsets (128x128 1.44" 패널 기준, 180도 회전 적용)
 // ---------------------------------------------------------------------------
 #define LCD_WIDTH       128
 #define LCD_HEIGHT      128
 #define LCD_PIXELS      (LCD_WIDTH * LCD_HEIGHT)
-#define LCD_X_OFFSET    2   // 128x128 모듈 기본 X 오프셋
-#define LCD_Y_OFFSET    1   // 128x128 모듈 기본 Y 오프셋
+#define LCD_X_OFFSET    2   // 128x128 모듈 X 오프셋 (180도 회전 시: 2)
+#define LCD_Y_OFFSET    2   // 128x128 모듈 Y 오프셋 (180도 회전 시: 2)
 
 // ST7735S 컨트롤러 전체 GDDRAM 크기
 #define ST7735_RAM_WIDTH   132
@@ -76,11 +76,22 @@
 // ---------------------------------------------------------------------------
 // Common RGB565 Colors
 // ---------------------------------------------------------------------------
+#define COLOR_BLACK     0x0000
+#define COLOR_WHITE     0xFFFF
 #define COLOR_RED       0xF800
 #define COLOR_GREEN     0x07E0
 #define COLOR_BLUE      0x001F
-#define COLOR_WHITE     0xFFFF
-#define COLOR_BLACK     0x0000
+#define COLOR_CYAN      0x07FF
+#define COLOR_MAGENTA   0xF81F
+#define COLOR_YELLOW    0xFFE0
+#define COLOR_ORANGE    0xFD20
+#define COLOR_GRAY      0x8410
+#define COLOR_DARKGRAY  0x39E7
+#define COLOR_LIGHTGRAY 0xC618
+#define COLOR_NAVY      0x000F
+#define COLOR_DARKBLUE  0x0010
+#define COLOR_DARKGREEN 0x03E0
+#define COLOR_PURPLE    0x780F
 
 // ---------------------------------------------------------------------------
 // Double Frame Buffer (128x128 x 2 버퍼, RGB565)

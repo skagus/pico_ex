@@ -1,22 +1,62 @@
-ST7735s LCD 의 동작확인을 위한 Project
+# Project 의 간략한 설명.
+ST7735s LCD 에서 간단한 UI를 표현해 보기.
+
+빌드 환경
+  - 환경 설정 방법 : C:\Apps\PiPicoSDK151\pico-env.cmd 실행
 
 H/W 구성
 - CPU : Raspberry Pi Pico (rp2040)
+
 - LCD    : ST7735s based color LCD Module
-    - Pin 구성은 아래와 같다. 
-        - VCC  -> 3V3
-        - GND  -> GND
-        - CS   -> GP1
-        - SCL  -> GP2
-        - SDA  -> GP3
-        - DC   -> GP4
-        - RES  -> GP5
-        - BL   -> GP6
+  - 1.44 inch, 128*128 , SPI interface
+  - Color 는 BRG 순서의 RGB565
+  - Pin 구성은 아래와 같다
+    - VCC  -> 3V3
+    - GND  -> GND
+    - CS   -> GP1
+    - SCL  -> GP2
+    - SDA  -> GP3
+    - DC   -> GP4
+    - RES  -> GP5
+    - BL   -> GP6
 
-- 동작 사항
-  - 전원 ON 시 화면 초기화 
-  - 초기화 완료 후 R, G, B 반복, 색깔 변경 간격은 1sec, 무한히 진행함.
+- 버튼 
+  - Push Button x 4ea
+  - Pin 구성은 아래와 같다
+    - Button 1(UP) -> GP26 
+    - Button 2(Down) -> GP27
+    - Button 3(Cancel) -> GP28
+    - Button 4(OK) -> GP29
 
-- 빌드 환경
-  - 환경 설정 방법 : C:\Apps\PiPicoSDK151\pico-env.cmd 실행.
+
+
+동작
+- 부팅 순서.
+  1. 전원 ON 시 화면 초기화 
+  2. 화면 클리어
+  3. R, G, B 색깔을 1 sec 간격으로 화면을 채움.
+  4. 메뉴 표시.
+
+- 메뉴 관리.
+  - 메뉴는 scroll 방식으로 표시, 
+  - Test 메뉴 갯수는 10개
+    - "LCD Test"
+    - "Display ID"
+    - "Display Time"
+    - "Display Color"
+    - "Display Pattern"
+    - "Display Progress"
+    - "Display Text"
+    - "Display Menu"
+    - "Display Button"
+    - "Exit"
+  - Menu는 Title과 status bar로 구성.
+    - Title : 현재 시각.
+    - Status Bar : Menu scroll indicator.
+    - Body : 6 개의 메뉴 표시.(현재 선택된 메뉴는 역상 표시)
+  
+  - 각 메뉴를 선택하면 해당 메뉴의 동작을 수행.
+    - UP/DOWN 버튼을 눌러서 메뉴를 스크롤.
+    - OK 버튼을 눌러서 메뉴 선택.
+    - Cancel 버튼은 항상 이전 메뉴로 돌아감.
 

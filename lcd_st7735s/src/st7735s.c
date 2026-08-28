@@ -289,9 +289,9 @@ void lcd_init(void) {
     // Display Inversion OFF
     lcd_write_cmd(ST7735_INVOFF);
 
-    // Memory Data Access Control (BGR color order)
+    // Memory Data Access Control (180도 회전: Row/Column Order 반전, BGR color order)
     lcd_write_cmd(ST7735_MADCTL);
-    lcd_write_data_byte(MADCTL_BGR);
+    lcd_write_data_byte(MADCTL_MY | MADCTL_MX | MADCTL_BGR);
 
     // Interface Pixel Format: 16-bit (RGB565)
     lcd_write_cmd(ST7735_COLMOD);
