@@ -115,6 +115,10 @@ void msc_disk_task(void)
                         spi_flash_read(block_addr, buffers[flush_idx].data + (b * DISK_BLOCK_SIZE), DISK_BLOCK_SIZE);
                     }
                 }
+                if(buffers[flush_idx].dirty_mask != FULL_SECT_BITMAP)
+                {
+                    LOG("R %d 0x%2X\n", flush_idx, ~buffers[flush_idx].dirty_mask & 0xFF);
+                }
                 buffers[flush_idx].dirty_mask = FULL_SECT_BITMAP;
             }
 
@@ -140,6 +144,7 @@ void msc_disk_task(void)
             const uint8_t *page_data = buffers[flush_idx].data + (flush_page_idx * SPI_FLASH_PAGE_SIZE);
 
             spi_flash_page_program_dma_start(page_addr, page_data, SPI_FLASH_PAGE_SIZE);
+            LOG("F %d\n", flush_idx);
             flush_state = FLUSH_STATE_PAGE_DMA_WAIT;
             break;
         }
@@ -167,7 +172,6 @@ void msc_disk_task(void)
                     // 4KB 섹터 플러시 완료
                     buffers[flush_idx].dirty_mask = 0;
                     buffers[flush_idx].state = BUF_STATE_FREE;
-                    LOG("F%d\n", flush_idx);
                     flush_idx = -1;
                     flush_state = FLUSH_STATE_IDLE;
                 }
@@ -300,6 +304,7 @@ int32_t tud_msc_read10_cb(uint8_t lun, uint32_t lba, uint32_t offset, void* buff
   {
     // 캐시 미스이거나 해당 블록이 아직 쓰이지 않은 상태이면 SPI Flash에서 읽기
     spi_flash_read(addr, (uint8_t*)buffer, bufsize);
+    LOG("r %d\n", hit_idx);
   }
 
   return (int32_t)bufsize;

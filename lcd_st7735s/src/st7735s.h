@@ -111,7 +111,7 @@ void lcd_init(void);
  * @brief LCD 전체 화면을 지정 색상으로 채움
  * @param color RGB565 포맷 색상값
  */
-void lcd_fill_color(uint16_t color);
+void lcd_fill_color(uint16_t *fb, uint16_t color);
 
 /**
  * @brief 지정된 프레임 버퍼를 16비트 SPI DMA로 전송 (Fire & Forget)
@@ -119,27 +119,6 @@ void lcd_fill_color(uint16_t color);
  */
 void lcd_draw_frame_buffer(const uint16_t *fb);
 
-/**
- * @brief 진행 중인 DMA/SPI 전송 대기
- */
-void lcd_wait_idle(void);
-
-/**
- * @brief DMA 전송 진행 여부 확인
- */
-bool lcd_is_busy(void);
-
-/**
- * @brief LCD에 커맨드 1바이트 전송 (동기 블로킹)
- * @param cmd 커맨드 바이트
- */
-void lcd_write_cmd(uint8_t cmd);
-
-/**
- * @brief LCD에 8비트 데이터 전송 (블로킹)
- * @param data 데이터 버퍼 포인터
- * @param len  데이터 길이 (바이트)
- */
-void lcd_write_data(const uint8_t *data, size_t len);
+bool lcd_is_busy();
 
 #endif // ST7735S_H

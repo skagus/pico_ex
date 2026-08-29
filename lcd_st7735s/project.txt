@@ -28,8 +28,6 @@ H/W 구성
     - Button 3(Cancel) -> GP28
     - Button 4(OK) -> GP29
 
-
-
 동작
 - 부팅 순서.
   1. 전원 ON 시 화면 초기화 

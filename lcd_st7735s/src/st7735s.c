@@ -2,19 +2,18 @@
 #include "pico/stdlib.h"
 #include "hardware/spi.h"
 #include "hardware/gpio.h"
-#include "hardware/dma.h"
-#include "hardware/irq.h"
 #include "st7735s.h"
+#include "spi_man.h"
 
 // ---------------------------------------------------------------------------
 // Internal Variables & Helpers
 // ---------------------------------------------------------------------------
 
-// DMA channel for SPI TX
-static int dma_tx_chan = -1;
-
 // 더블 프레임 버퍼 (128 x 128 x 2버퍼, 64KB)
 uint16_t g_frame_buffers[2][LCD_PIXELS];
+
+// 동기 SPI 완료 플래그 (post_exec에 의해 세팅)
+static volatile bool s_spi_done = false;
 
 /**
  * @brief CS 핀을 Low로 설정 (SPI 전송 시작)
@@ -44,26 +43,51 @@ static inline void lcd_dc_data(void) {
     gpio_put(PIN_DC, 1);
 }
 
-/**
- * @brief SPI 하드웨어의 TX FIFO 및 전송이 완전히 끝날 때까지 대기
- */
-static inline void lcd_wait_spi_finish(void) {
-    while (spi_get_hw(LCD_SPI_PORT)->sr & SPI_SSPSR_BSY_BITS) {
-        tight_loop_contents();
-    }
+// ---------------------------------------------------------------------------
+// Callback Functions for spi_man
+// ---------------------------------------------------------------------------
+
+static void lcd_cmd_pre_exec(spi_hw_t *hw) {
+    (void)hw;
+    spi_set_format(LCD_SPI_PORT, 8, SPI_CPOL_0, SPI_CPHA_0, SPI_MSB_FIRST);
+    lcd_dc_command();
+    lcd_cs_select();
 }
 
-/**
- * @brief DMA 전송 완료 시 호출되는 인터럽트 핸들러 (CS 자동 해제 & 8비트 모드 복구)
- */
-static void dma_irq_handler(void) {
-    if (dma_tx_chan >= 0 && dma_channel_get_irq0_status(dma_tx_chan)) {
-        dma_channel_acknowledge_irq0(dma_tx_chan);
-        lcd_wait_spi_finish();
-        lcd_cs_deselect();
-        // 8비트 모드로 복구
-        spi_set_format(LCD_SPI_PORT, 8, SPI_CPOL_0, SPI_CPHA_0, SPI_MSB_FIRST);
-    }
+static void lcd_cmd_post_exec(spi_hw_t *hw) {
+    (void)hw;
+    lcd_cs_deselect();
+    s_spi_done = true;
+}
+
+static void lcd_data_pre_exec(spi_hw_t *hw) {
+    (void)hw;
+    spi_set_format(LCD_SPI_PORT, 8, SPI_CPOL_0, SPI_CPHA_0, SPI_MSB_FIRST);
+    lcd_dc_data();
+    lcd_cs_select();
+}
+
+static void lcd_data_post_exec(spi_hw_t *hw) {
+    (void)hw;
+    lcd_cs_deselect();
+    s_spi_done = true;
+}
+
+static void lcd_fb_pre_exec(spi_hw_t *hw) {
+    (void)hw;
+    spi_set_format(LCD_SPI_PORT, 16, SPI_CPOL_0, SPI_CPHA_0, SPI_MSB_FIRST);
+    lcd_dc_data();
+    lcd_cs_select();
+}
+
+// LCD 비동기 프레임버퍼 DMA 전송 완료 플래그 (post_exec에 의해 클리어)
+static volatile bool s_lcd_busy = false;
+
+static void lcd_fb_post_exec(spi_hw_t *hw) {
+    (void)hw;
+    lcd_cs_deselect();
+    spi_set_format(LCD_SPI_PORT, 8, SPI_CPOL_0, SPI_CPHA_0, SPI_MSB_FIRST);
+    s_lcd_busy = false;
 }
 
 // ---------------------------------------------------------------------------
@@ -71,47 +95,69 @@ static void dma_irq_handler(void) {
 // ---------------------------------------------------------------------------
 
 bool lcd_is_busy(void) {
-    if (dma_tx_chan >= 0 && dma_channel_is_busy(dma_tx_chan)) {
-        return true;
+    return s_lcd_busy;
+}
+
+static void lcd_wait_idle(void) {
+    while (s_lcd_busy) {
+        tight_loop_contents();
     }
-    return (spi_get_hw(LCD_SPI_PORT)->sr & SPI_SSPSR_BSY_BITS) != 0;
 }
 
-void lcd_wait_idle(void) {
-    if (dma_tx_chan >= 0 && dma_channel_is_busy(dma_tx_chan)) {
-        dma_channel_wait_for_finish_blocking(dma_tx_chan);
+static void lcd_write_cmd(uint8_t cmd) {
+    static uint8_t s_cmd;
+    s_cmd = cmd;
+    s_spi_done = false;
+
+    spi_req_t *req = spi_alloc_req();
+    req->data = &s_cmd;
+    req->len = 1;
+    req->pre_exec = lcd_cmd_pre_exec;
+    req->post_exec = lcd_cmd_post_exec;
+
+    spi_push_req(req);
+
+    // post_exec에 의한 SPI completion 대기
+    while (!s_spi_done) {
+        tight_loop_contents();
     }
-    lcd_wait_spi_finish();
-    lcd_cs_deselect();
-    spi_set_format(LCD_SPI_PORT, 8, SPI_CPOL_0, SPI_CPHA_0, SPI_MSB_FIRST);
 }
 
-void lcd_write_cmd(uint8_t cmd) {
-    lcd_wait_idle();
-    lcd_dc_command();
-    lcd_cs_select();
-    spi_write_blocking(LCD_SPI_PORT, &cmd, 1);
-    lcd_wait_spi_finish();
-    lcd_cs_deselect();
-}
-
-void lcd_write_data(const uint8_t *data, size_t len) {
+static void lcd_write_data(const uint8_t *data, size_t len) {
     if (len == 0) return;
-    lcd_wait_idle();
-    lcd_dc_data();
-    lcd_cs_select();
-    spi_write_blocking(LCD_SPI_PORT, data, len);
-    lcd_wait_spi_finish();
-    lcd_cs_deselect();
+    s_spi_done = false;
+
+    spi_req_t *req = spi_alloc_req();
+    req->data = (uint8_t *)data;
+    req->len = len;
+    req->pre_exec = lcd_data_pre_exec;
+    req->post_exec = lcd_data_post_exec;
+
+    spi_push_req(req);
+
+    // post_exec에 의한 SPI completion 대기
+    while (!s_spi_done) {
+        tight_loop_contents();
+    }
 }
 
 static void lcd_write_data_byte(uint8_t data) {
-    lcd_wait_idle();
-    lcd_dc_data();
-    lcd_cs_select();
-    spi_write_blocking(LCD_SPI_PORT, &data, 1);
-    lcd_wait_spi_finish();
-    lcd_cs_deselect();
+    static uint8_t s_byte;
+    s_byte = data;
+    s_spi_done = false;
+
+    spi_req_t *req = spi_alloc_req();
+    req->data = &s_byte;
+    req->len = 1;
+    req->pre_exec = lcd_data_pre_exec;
+    req->post_exec = lcd_data_post_exec;
+
+    spi_push_req(req);
+
+    // post_exec에 의한 SPI completion 대기
+    while (!s_spi_done) {
+        tight_loop_contents();
+    }
 }
 
 static void lcd_hw_reset(void) {
@@ -146,39 +192,25 @@ static void lcd_set_window(uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1) {
 
 void lcd_draw_frame_buffer(const uint16_t *fb) {
     lcd_wait_idle();
+    s_lcd_busy = true;
 
     // 윈도우 설정 (0,0)~(127,127) 및 RAMWR 커맨드 전송
     lcd_set_window(0, 0, LCD_WIDTH - 1, LCD_HEIGHT - 1);
 
-    // 16비트 SPI 모드로 전환하여 데이터 전송
-    spi_set_format(LCD_SPI_PORT, 16, SPI_CPOL_0, SPI_CPHA_0, SPI_MSB_FIRST);
+    // 16비트 SPI DMA 전송 요청 등록 (비동기 처리)
+    spi_req_t *req = spi_alloc_req();
+    req->data = (uint8_t *)fb;
+    req->len = LCD_PIXELS; // 16비트 워드 수
+    req->pre_exec = lcd_fb_pre_exec;
+    req->post_exec = lcd_fb_post_exec;
 
-    lcd_dc_data();
-    lcd_cs_select();
-
-    // 16비트 DMA 설정 (16,384개 16비트 워드 전송)
-    dma_channel_config c = dma_channel_get_default_config(dma_tx_chan);
-    channel_config_set_transfer_data_size(&c, DMA_SIZE_16);
-    channel_config_set_dreq(&c, spi_get_dreq(LCD_SPI_PORT, true));
-    channel_config_set_read_increment(&c, true);
-    channel_config_set_write_increment(&c, false);
-
-    dma_channel_configure(
-        dma_tx_chan,
-        &c,
-        &spi_get_hw(LCD_SPI_PORT)->dr, // SPI TX FIFO
-        fb,                            // 16비트 프레임 버퍼
-        LCD_PIXELS,                    // 16비트 워드 수
-        true                           // Fire & Forget 즉시 시작
-    );
+    spi_push_req(req);
 }
 
-void lcd_fill_color(uint16_t color) {
+void lcd_fill_color(uint16_t *fb, uint16_t color) {
     for (size_t i = 0; i < LCD_PIXELS; i++) {
-        g_frame_buffers[0][i] = color;
+        fb[i] = color;
     }
-    lcd_draw_frame_buffer(g_frame_buffers[0]);
-    lcd_wait_idle();
 }
 
 void lcd_init(void) {
@@ -208,12 +240,9 @@ void lcd_init(void) {
     gpio_put(PIN_BL, 1);   // Backlight ON
 
     // -----------------------------------------------------------------------
-    // 3. DMA & IRQ 초기화 (Fire & Forget 및 CS 자동 해제용)
+    // 3. SPI Request Manager 및 DMA 초기화
     // -----------------------------------------------------------------------
-    dma_tx_chan = dma_claim_unused_channel(true);
-    dma_channel_set_irq0_enabled(dma_tx_chan, true);
-    irq_set_exclusive_handler(DMA_IRQ_0, dma_irq_handler);
-    irq_set_enabled(DMA_IRQ_0, true);
+    spi_man_init(LCD_SPI_PORT);
 
     // -----------------------------------------------------------------------
     // 4. 하드웨어 리셋
@@ -337,14 +366,11 @@ void lcd_init(void) {
     lcd_set_window_raw(0, 0, ST7735_RAM_WIDTH - 1, ST7735_RAM_HEIGHT - 1);
     uint16_t *zero_buf = g_frame_buffers[0];
     memset(zero_buf, 0, sizeof(g_frame_buffers[0]));
-    lcd_dc_data();
-    lcd_cs_select();
     for (int y = 0; y < ST7735_RAM_HEIGHT; y++) {
-        spi_write_blocking(LCD_SPI_PORT, (const uint8_t *)zero_buf, sizeof(g_frame_buffers[0]));
+        lcd_write_data((const uint8_t *)zero_buf, sizeof(g_frame_buffers[0]));
     }
-    lcd_wait_spi_finish();
-    lcd_cs_deselect();
 
     // 초기 화면을 검은색으로 클리어
-    lcd_fill_color(COLOR_BLACK);
+    lcd_fill_color(g_frame_buffers[0], COLOR_BLACK);
+    lcd_draw_frame_buffer(g_frame_buffers[0]);
 }

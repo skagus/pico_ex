@@ -201,7 +201,15 @@ static void render_display_id(uint16_t *buf) {
     gfx_draw_string(buf, 12, 72, id_part2, COLOR_WHITE, GFX_COLOR_TRANSPARENT, 1);
 
     gfx_draw_string(buf, 4, 88, "LCD: ST7735S", COLOR_GREEN, GFX_COLOR_TRANSPARENT, 1);
-    gfx_draw_string(buf, 4, 100, "Res: 128x128", COLOR_LIGHTGRAY, GFX_COLOR_TRANSPARENT, 1);
+
+    uint8_t unique_id[8];
+    flash_get_unique_id(unique_id);    
+
+    char flash_buf[24];
+    snprintf(flash_buf, sizeof(flash_buf), "F ID:%02X%02X_%02X%02X", 
+            unique_id[0], unique_id[1], unique_id[2], unique_id[3]);
+
+    gfx_draw_string(buf, 4, 100, flash_buf, COLOR_MAGENTA, GFX_COLOR_TRANSPARENT, 1);
 
     render_footer(buf, "Info Ready", "[CANCEL]");
 }

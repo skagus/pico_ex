@@ -18,6 +18,7 @@ add_executable(${PROJECT_NAME}
     src/gfx.c
     src/button.c
     src/ui_menu.c
+    src/spi_man.c
 )
 
 # Generate the PIO header file from our .pio file and add it to our executable
@@ -35,6 +36,7 @@ target_include_directories(${PROJECT_NAME} PRIVATE
 # Link to the necessary SDK libraries
 target_link_libraries(${PROJECT_NAME}
     pico_stdlib
+    pico_time
     pico_unique_id
     hardware_gpio
     hardware_spi
