@@ -89,7 +89,12 @@ static void spi_man_dma_irq_handler(void) {
             completed_req->post_exec(spi_get_hw(g_spi));
         }
 
-        // 2. 완료된 요청 반환
+        // 2. 요청자의 동기 완료 플래그 세팅
+        if (completed_req && completed_req->p_done) {
+            *(completed_req->p_done) = true;
+        }
+
+        // 3. 완료된 요청 반환
         if (completed_req) {
             spi_free_req(completed_req);
         }

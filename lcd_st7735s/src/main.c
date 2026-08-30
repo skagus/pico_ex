@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include "pico/stdlib.h"
 #include <pico/time.h>
 #include <hardware/gpio.h>
 #include "st7735s.h"
@@ -53,7 +54,7 @@ int main(void) {
     while (true) {
         curr = get_absolute_time();
         uint64_t ui_diff = absolute_time_diff_us(ui_prev, curr);
-        if(ui_diff >= ABS_MSEC(30))
+        if(ui_diff >= ABS_MSEC(30) && !lcd_is_busy())
         {
             ui_prev = curr;
 
@@ -70,8 +71,10 @@ int main(void) {
             // 4. 렌더링된 버퍼를 16비트 SPI DMA로 전송 시작 (Fire & Forget)
             lcd_draw_frame_buffer(draw_buf);
 
-            // 5. 더블 버퍼 인덱스 스왑
-            draw_idx = 1 - draw_idx;
+            // 5. 프레임 버퍼 인덱스 스왑
+#if LCD_NUM_BUFFERS > 1
+            draw_idx = (draw_idx + 1) % LCD_NUM_BUFFERS;
+#endif
         }
         
         curr = get_absolute_time();

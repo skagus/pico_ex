@@ -9,11 +9,8 @@
 // Internal Variables & Helpers
 // ---------------------------------------------------------------------------
 
-// 더블 프레임 버퍼 (128 x 128 x 2버퍼, 64KB)
-uint16_t g_frame_buffers[2][LCD_PIXELS];
-
-// 동기 SPI 완료 플래그 (post_exec에 의해 세팅)
-static volatile bool s_spi_done = false;
+// 프레임 버퍼 (ST7735S: 더블 버퍼 64KB, ST7789: 싱글 버퍼 153.6KB)
+uint16_t g_frame_buffers[LCD_NUM_BUFFERS][LCD_PIXELS];
 
 /**
  * @brief CS 핀을 Low로 설정 (SPI 전송 시작)
@@ -52,12 +49,13 @@ static void lcd_cmd_pre_exec(spi_hw_t *hw) {
     spi_set_format(LCD_SPI_PORT, 8, SPI_CPOL_0, SPI_CPHA_0, SPI_MSB_FIRST);
     lcd_dc_command();
     lcd_cs_select();
+    busy_wait_us(1);
 }
 
 static void lcd_cmd_post_exec(spi_hw_t *hw) {
     (void)hw;
     lcd_cs_deselect();
-    s_spi_done = true;
+    busy_wait_us(1);
 }
 
 static void lcd_data_pre_exec(spi_hw_t *hw) {
@@ -65,12 +63,13 @@ static void lcd_data_pre_exec(spi_hw_t *hw) {
     spi_set_format(LCD_SPI_PORT, 8, SPI_CPOL_0, SPI_CPHA_0, SPI_MSB_FIRST);
     lcd_dc_data();
     lcd_cs_select();
+    busy_wait_us(1);
 }
 
 static void lcd_data_post_exec(spi_hw_t *hw) {
     (void)hw;
     lcd_cs_deselect();
-    s_spi_done = true;
+    busy_wait_us(1);
 }
 
 static void lcd_fb_pre_exec(spi_hw_t *hw) {
@@ -78,6 +77,7 @@ static void lcd_fb_pre_exec(spi_hw_t *hw) {
     spi_set_format(LCD_SPI_PORT, 16, SPI_CPOL_0, SPI_CPHA_0, SPI_MSB_FIRST);
     lcd_dc_data();
     lcd_cs_select();
+    busy_wait_us(1);
 }
 
 // LCD 비동기 프레임버퍼 DMA 전송 완료 플래그 (post_exec에 의해 클리어)
@@ -88,6 +88,7 @@ static void lcd_fb_post_exec(spi_hw_t *hw) {
     lcd_cs_deselect();
     spi_set_format(LCD_SPI_PORT, 8, SPI_CPOL_0, SPI_CPHA_0, SPI_MSB_FIRST);
     s_lcd_busy = false;
+    busy_wait_us(1);
 }
 
 // ---------------------------------------------------------------------------
@@ -105,57 +106,63 @@ static void lcd_wait_idle(void) {
 }
 
 static void lcd_write_cmd(uint8_t cmd) {
-    static uint8_t s_cmd;
-    s_cmd = cmd;
-    s_spi_done = false;
+    volatile bool done = false;
 
     spi_req_t *req = spi_alloc_req();
-    req->data = &s_cmd;
+    req->inline_buf[0] = cmd;
+    req->data = req->inline_buf;
     req->len = 1;
     req->pre_exec = lcd_cmd_pre_exec;
     req->post_exec = lcd_cmd_post_exec;
+    req->p_done = &done;
 
     spi_push_req(req);
 
-    // post_exec에 의한 SPI completion 대기
-    while (!s_spi_done) {
+    // post_exec 완료 대기
+    while (!done) {
         tight_loop_contents();
     }
 }
 
 static void lcd_write_data(const uint8_t *data, size_t len) {
     if (len == 0) return;
-    s_spi_done = false;
+    volatile bool done = false;
 
     spi_req_t *req = spi_alloc_req();
-    req->data = (uint8_t *)data;
+    if (len <= sizeof(req->inline_buf)) {
+        memcpy(req->inline_buf, data, len);
+        req->data = req->inline_buf;
+    } else {
+        req->data = (uint8_t *)data;
+    }
     req->len = len;
     req->pre_exec = lcd_data_pre_exec;
     req->post_exec = lcd_data_post_exec;
+    req->p_done = &done;
 
     spi_push_req(req);
 
-    // post_exec에 의한 SPI completion 대기
-    while (!s_spi_done) {
+    // post_exec 완료 대기
+    while (!done) {
         tight_loop_contents();
     }
 }
 
 static void lcd_write_data_byte(uint8_t data) {
-    static uint8_t s_byte;
-    s_byte = data;
-    s_spi_done = false;
+    volatile bool done = false;
 
     spi_req_t *req = spi_alloc_req();
-    req->data = &s_byte;
+    req->inline_buf[0] = data;
+    req->data = req->inline_buf;
     req->len = 1;
     req->pre_exec = lcd_data_pre_exec;
     req->post_exec = lcd_data_post_exec;
+    req->p_done = &done;
 
     spi_push_req(req);
 
-    // post_exec에 의한 SPI completion 대기
-    while (!s_spi_done) {
+    // post_exec 완료 대기
+    while (!done) {
         tight_loop_contents();
     }
 }
@@ -171,16 +178,12 @@ static void lcd_hw_reset(void) {
 
 static void lcd_set_window_raw(uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1) {
     lcd_write_cmd(ST7735_CASET);
-    uint8_t col_data[] = {(uint8_t)(x0 >> 8), (uint8_t)x0, (uint8_t)(x1 >> 8), (uint8_t)x1};
-    for (int i = 0; i < 4; i++) {
-        lcd_write_data_byte(col_data[i]);
-    }
+    uint8_t col_data[4] = {(uint8_t)(x0 >> 8), (uint8_t)x0, (uint8_t)(x1 >> 8), (uint8_t)x1};
+    lcd_write_data(col_data, 4);
 
     lcd_write_cmd(ST7735_RASET);
-    uint8_t row_data[] = {(uint8_t)(y0 >> 8), (uint8_t)y0, (uint8_t)(y1 >> 8), (uint8_t)y1};
-    for (int i = 0; i < 4; i++) {
-        lcd_write_data_byte(row_data[i]);
-    }
+    uint8_t row_data[4] = {(uint8_t)(y0 >> 8), (uint8_t)y0, (uint8_t)(y1 >> 8), (uint8_t)y1};
+    lcd_write_data(row_data, 4);
 
     lcd_write_cmd(ST7735_RAMWR);
 }
@@ -194,7 +197,7 @@ void lcd_draw_frame_buffer(const uint16_t *fb) {
     lcd_wait_idle();
     s_lcd_busy = true;
 
-    // 윈도우 설정 (0,0)~(127,127) 및 RAMWR 커맨드 전송
+    // 윈도우 설정 (0,0)~(WIDTH-1, HEIGHT-1) 및 RAMWR 커맨드 전송
     lcd_set_window(0, 0, LCD_WIDTH - 1, LCD_HEIGHT - 1);
 
     // 16비트 SPI DMA 전송 요청 등록 (비동기 처리)
@@ -213,46 +216,11 @@ void lcd_fill_color(uint16_t *fb, uint16_t color) {
     }
 }
 
-void lcd_init(void) {
-    // -----------------------------------------------------------------------
-    // 1. SPI 초기화 (기본 8비트 모드)
-    // -----------------------------------------------------------------------
-    spi_init(LCD_SPI_PORT, LCD_SPI_FREQ);
-    spi_set_format(LCD_SPI_PORT, 8, SPI_CPOL_0, SPI_CPHA_0, SPI_MSB_FIRST);
-    gpio_set_function(PIN_SCK,  GPIO_FUNC_SPI);
-    gpio_set_function(PIN_MOSI, GPIO_FUNC_SPI);
-
-    // -----------------------------------------------------------------------
-    // 2. GPIO 초기화 (CS, DC, RES, BL)
-    // -----------------------------------------------------------------------
-    gpio_init(PIN_CS);
-    gpio_set_dir(PIN_CS, GPIO_OUT);
-    gpio_put(PIN_CS, 1);    // CS idle high
-
-    gpio_init(PIN_DC);
-    gpio_set_dir(PIN_DC, GPIO_OUT);
-
-    gpio_init(PIN_RES);
-    gpio_set_dir(PIN_RES, GPIO_OUT);
-
-    gpio_init(PIN_BL);
-    gpio_set_dir(PIN_BL, GPIO_OUT);
-    gpio_put(PIN_BL, 1);   // Backlight ON
-
-    // -----------------------------------------------------------------------
-    // 3. SPI Request Manager 및 DMA 초기화
-    // -----------------------------------------------------------------------
-    spi_man_init(LCD_SPI_PORT);
-
-    // -----------------------------------------------------------------------
-    // 4. 하드웨어 리셋
-    // -----------------------------------------------------------------------
-    lcd_hw_reset();
-
-    // -----------------------------------------------------------------------
-    // 5. LCD 초기화 시퀀스
-    // -----------------------------------------------------------------------
-
+#if defined(USE_LCD_ST7789)
+// ---------------------------------------------------------------------------
+// ST7789 (2.4" 240x320 세로 모드) 초기화 시퀀스
+// ---------------------------------------------------------------------------
+static void lcd_init_st7789(void) {
     // Software Reset
     lcd_write_cmd(ST7735_SWRESET);
     sleep_ms(150);
@@ -261,11 +229,99 @@ void lcd_init(void) {
     lcd_write_cmd(ST7735_SLPOUT);
     sleep_ms(150);
 
-    // Frame Rate Control (Normal mode) - 최대 갱신 주기를 위해 설정
+    // Interface Pixel Format: 16-bit (RGB565)
+    lcd_write_cmd(ST7735_COLMOD);
+    lcd_write_data_byte(0x55);
+
+    // Memory Data Access Control (세로 모드 240x320: RGB Color Order)
+    lcd_write_cmd(ST7735_MADCTL);
+    lcd_write_data_byte(0x00);
+
+    // Porch Setting
+    lcd_write_cmd(0xB2);
+    {
+        uint8_t porch[] = {0x0C, 0x0C, 0x00, 0x33, 0x33};
+        for (size_t i = 0; i < sizeof(porch); i++) lcd_write_data_byte(porch[i]);
+    }
+
+    // Gate Control
+    lcd_write_cmd(0xB7);
+    lcd_write_data_byte(0x35);
+
+    // VCOM Setting
+    lcd_write_cmd(0xBB);
+    lcd_write_data_byte(0x19);
+
+    // LCM Control
+    lcd_write_cmd(0xC0);
+    lcd_write_data_byte(0x2C);
+
+    // VDV and VRH Command Enable
+    lcd_write_cmd(0xC2);
+    lcd_write_data_byte(0x01);
+
+    // VRH Set
+    lcd_write_cmd(0xC3);
+    lcd_write_data_byte(0x12);
+
+    // VDV Set
+    lcd_write_cmd(0xC4);
+    lcd_write_data_byte(0x20);
+
+    // Frame Rate Control in Normal Mode (60Hz)
+    lcd_write_cmd(0xC6);
+    lcd_write_data_byte(0x0F);
+
+    // Power Control 1
+    lcd_write_cmd(0xD0);
+    lcd_write_data_byte(0xA4);
+    lcd_write_data_byte(0xA1);
+
+    // Positive Voltage Gamma Control
+    lcd_write_cmd(ST7735_GMCTRP1);
+    {
+        uint8_t pv_gamma[] = {0xD0, 0x04, 0x0D, 0x11, 0x13, 0x2B, 0x3F, 0x54, 0x4C, 0x18, 0x0D, 0x0B, 0x1F, 0x23};
+        for (size_t i = 0; i < sizeof(pv_gamma); i++) lcd_write_data_byte(pv_gamma[i]);
+    }
+
+    // Negative Voltage Gamma Control
+    lcd_write_cmd(ST7735_GMCTRN1);
+    {
+        uint8_t nv_gamma[] = {0xD0, 0x04, 0x0C, 0x11, 0x13, 0x2C, 0x3F, 0x44, 0x51, 0x2F, 0x1F, 0x1F, 0x20, 0x23};
+        for (size_t i = 0; i < sizeof(nv_gamma); i++) lcd_write_data_byte(nv_gamma[i]);
+    }
+
+    // Display Inversion OFF (표준 TFT 모드: Black=0x0000, White=0xFFFF)
+    lcd_write_cmd(ST7735_INVOFF);
+    sleep_ms(10);
+
+    // Normal Display Mode ON
+    lcd_write_cmd(ST7735_NORON);
+    sleep_ms(10);
+
+    // Display ON
+    lcd_write_cmd(ST7735_DISPON);
+    sleep_ms(100);
+}
+
+#else
+// ---------------------------------------------------------------------------
+// ST7735S (1.44" 128x128 180도 회전 모드) 초기화 시퀀스
+// ---------------------------------------------------------------------------
+static void lcd_init_st7735s(void) {
+    // Software Reset
+    lcd_write_cmd(ST7735_SWRESET);
+    sleep_ms(150);
+
+    // Sleep Out
+    lcd_write_cmd(ST7735_SLPOUT);
+    sleep_ms(150);
+
+    // Frame Rate Control (Normal mode)
     lcd_write_cmd(ST7735_FRMCTR1);
-    lcd_write_data_byte(0x01);  // RTNA
-    lcd_write_data_byte(0x2C);  // Front porch
-    lcd_write_data_byte(0x2D);  // Back porch
+    lcd_write_data_byte(0x01);
+    lcd_write_data_byte(0x2C);
+    lcd_write_data_byte(0x2D);
 
     // Frame Rate Control (Idle mode)
     lcd_write_cmd(ST7735_FRMCTR2);
@@ -335,9 +391,7 @@ void lcd_init(void) {
             0x29, 0x25, 0x2B, 0x39,
             0x00, 0x01, 0x03, 0x10
         };
-        for (size_t i = 0; i < sizeof(gamma_p); i++) {
-            lcd_write_data_byte(gamma_p[i]);
-        }
+        for (size_t i = 0; i < sizeof(gamma_p); i++) lcd_write_data_byte(gamma_p[i]);
     }
 
     // Negative Gamma Correction
@@ -349,9 +403,7 @@ void lcd_init(void) {
             0x2E, 0x2E, 0x37, 0x3F,
             0x00, 0x00, 0x02, 0x10
         };
-        for (size_t i = 0; i < sizeof(gamma_n); i++) {
-            lcd_write_data_byte(gamma_n[i]);
-        }
+        for (size_t i = 0; i < sizeof(gamma_n); i++) lcd_write_data_byte(gamma_n[i]);
     }
 
     // Normal Display Mode ON
@@ -369,6 +421,53 @@ void lcd_init(void) {
     for (int y = 0; y < ST7735_RAM_HEIGHT; y++) {
         lcd_write_data((const uint8_t *)zero_buf, sizeof(g_frame_buffers[0]));
     }
+}
+#endif
+
+void lcd_init(void) {
+    // -----------------------------------------------------------------------
+    // 1. SPI 초기화 (기본 8비트 모드)
+    // -----------------------------------------------------------------------
+    spi_init(LCD_SPI_PORT, LCD_SPI_FREQ);
+    spi_set_format(LCD_SPI_PORT, 8, SPI_CPOL_0, SPI_CPHA_0, SPI_MSB_FIRST);
+    gpio_set_function(PIN_SCK,  GPIO_FUNC_SPI);
+    gpio_set_function(PIN_MOSI, GPIO_FUNC_SPI);
+
+    // -----------------------------------------------------------------------
+    // 2. GPIO 초기화 (CS, DC, RES, BL)
+    // -----------------------------------------------------------------------
+    gpio_init(PIN_CS);
+    gpio_set_dir(PIN_CS, GPIO_OUT);
+    gpio_put(PIN_CS, 1);    // CS idle high
+
+    gpio_init(PIN_DC);
+    gpio_set_dir(PIN_DC, GPIO_OUT);
+
+    gpio_init(PIN_RES);
+    gpio_set_dir(PIN_RES, GPIO_OUT);
+
+    gpio_init(PIN_BL);
+    gpio_set_dir(PIN_BL, GPIO_OUT);
+    gpio_put(PIN_BL, 1);   // Backlight ON
+
+    // -----------------------------------------------------------------------
+    // 3. SPI Request Manager 및 DMA 초기화
+    // -----------------------------------------------------------------------
+    spi_man_init(LCD_SPI_PORT);
+
+    // -----------------------------------------------------------------------
+    // 4. 하드웨어 리셋
+    // -----------------------------------------------------------------------
+    lcd_hw_reset();
+
+    // -----------------------------------------------------------------------
+    // 5. 선택된 LCD 모델별 초기화 시퀀스
+    // -----------------------------------------------------------------------
+#if defined(USE_LCD_ST7789)
+    lcd_init_st7789();
+#else
+    lcd_init_st7735s();
+#endif
 
     // 초기 화면을 검은색으로 클리어
     lcd_fill_color(g_frame_buffers[0], COLOR_BLACK);

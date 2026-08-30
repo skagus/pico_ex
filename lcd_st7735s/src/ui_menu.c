@@ -4,6 +4,7 @@
 #include "pico/stdlib.h"
 #include "pico/unique_id.h"
 #include "hardware/clocks.h"
+#include "hardware/flash.h"
 #include "ui_menu.h"
 #include "button.h"
 #include "gfx.h"
@@ -66,17 +67,18 @@ static void render_header(uint16_t *buf, const char *title) {
 }
 
 static void render_footer(uint16_t *buf, const char *left_hint, const char *right_hint) {
+    int footer_y = LCD_HEIGHT - 14;
     // Status Bar 배경 (짙은 회색)
-    gfx_fill_rect(buf, 0, 114, LCD_WIDTH, 14, COLOR_DARKGRAY);
-    gfx_draw_fast_h_line(buf, 0, 113, LCD_WIDTH, COLOR_LIGHTGRAY);
+    gfx_fill_rect(buf, 0, footer_y, LCD_WIDTH, 14, COLOR_DARKGRAY);
+    gfx_draw_fast_h_line(buf, 0, footer_y - 1, LCD_WIDTH, COLOR_LIGHTGRAY);
 
     if (left_hint) {
-        gfx_draw_string(buf, 3, 117, left_hint, COLOR_WHITE, GFX_COLOR_TRANSPARENT, 1);
+        gfx_draw_string(buf, 3, footer_y + 3, left_hint, COLOR_WHITE, GFX_COLOR_TRANSPARENT, 1);
     }
     if (right_hint) {
         int len = (int)strlen(right_hint);
         int x = LCD_WIDTH - (len * 8) - 2;
-        gfx_draw_string(buf, x, 117, right_hint, COLOR_CYAN, GFX_COLOR_TRANSPARENT, 1);
+        gfx_draw_string(buf, x, footer_y + 3, right_hint, COLOR_CYAN, GFX_COLOR_TRANSPARENT, 1);
     }
 }
 
@@ -85,11 +87,13 @@ static void render_footer(uint16_t *buf, const char *left_hint, const char *righ
 // ---------------------------------------------------------------------------
 static void render_main_menu(uint16_t *buf) {
     // 1. Title Bar
-    render_header(buf, "ST7735S");
+    render_header(buf, LCD_NAME);
 
-    // 2. Body: 6개 메뉴 항목 표시 (Y: 16 ~ 111, 각 행 높이 16px)
-    const int item_height = 16;
-    const int start_y = 16;
+    // 2. Body: 메뉴 항목 표시 (반응형 행 높이)
+    int start_y = 16;
+    int footer_y = LCD_HEIGHT - 14;
+    int available_h = footer_y - start_y;
+    int item_height = available_h / MENU_VISIBLE_COUNT;
 
     for (int i = 0; i < MENU_VISIBLE_COUNT; i++) {
         int item_idx = scroll_top + i;
@@ -105,25 +109,25 @@ static void render_main_menu(uint16_t *buf) {
             // 번호와 메뉴명 출력 (검은색 폰트)
             char text[32];
             snprintf(text, sizeof(text), ">%d.%-11s", item_idx + 1, menu_names[item_idx]);
-            gfx_draw_string(buf, 4, y + 4, text, COLOR_BLACK, GFX_COLOR_TRANSPARENT, 1);
+            gfx_draw_string(buf, 4, y + (item_height - 8) / 2, text, COLOR_BLACK, GFX_COLOR_TRANSPARENT, 1);
         } else {
             // 미선택 메뉴는 일반 텍스트
             gfx_fill_rect(buf, 2, y + 1, LCD_WIDTH - 10, item_height - 2, COLOR_BLACK);
             char text[32];
             snprintf(text, sizeof(text), " %d.%-11s", item_idx + 1, menu_names[item_idx]);
-            gfx_draw_string(buf, 4, y + 4, text, COLOR_LIGHTGRAY, GFX_COLOR_TRANSPARENT, 1);
+            gfx_draw_string(buf, 4, y + (item_height - 8) / 2, text, COLOR_LIGHTGRAY, GFX_COLOR_TRANSPARENT, 1);
         }
     }
 
-    // 3. 우측 스크롤 바 인디케이터 (Y: 16 ~ 111)
+    // 3. 우측 스크롤 바 인디케이터
     int track_x = LCD_WIDTH - 6;
-    int track_y = 16;
-    int track_h = 96;
+    int track_y = start_y;
+    int track_h = item_height * MENU_VISIBLE_COUNT;
     gfx_fill_rect(buf, track_x, track_y, 4, track_h, COLOR_DARKGRAY);
 
     // 스크롤 썸(Thumb) 계산
-    int thumb_h = (track_h * MENU_VISIBLE_COUNT) / MENU_ITEM_COUNT; // 57px
-    int max_scroll = MENU_ITEM_COUNT - MENU_VISIBLE_COUNT;           // 4
+    int thumb_h = (track_h * MENU_VISIBLE_COUNT) / MENU_ITEM_COUNT;
+    int max_scroll = MENU_ITEM_COUNT - MENU_VISIBLE_COUNT;
     int thumb_y = track_y;
     if (max_scroll > 0) {
         thumb_y += (scroll_top * (track_h - thumb_h)) / max_scroll;
@@ -144,27 +148,37 @@ static void render_main_menu(uint16_t *buf) {
 static void render_lcd_test(uint16_t *buf) {
     render_header(buf, "LCD TEST");
 
+    int body_top = 18;
+    int body_bottom = LCD_HEIGHT - 18;
+    int body_h = body_bottom - body_top;
+
     // 화면 영역 테두리
-    gfx_draw_rect(buf, 2, 16, LCD_WIDTH - 4, 95, COLOR_WHITE);
-    gfx_draw_rect(buf, 4, 18, LCD_WIDTH - 8, 91, COLOR_RED);
+    gfx_draw_rect(buf, 2, body_top, LCD_WIDTH - 4, body_h, COLOR_WHITE);
+    gfx_draw_rect(buf, 4, body_top + 2, LCD_WIDTH - 8, body_h - 4, COLOR_RED);
 
     // 십자선
-    gfx_draw_line(buf, LCD_WIDTH / 2, 18, LCD_WIDTH / 2, 108, COLOR_GREEN);
-    gfx_draw_line(buf, 4, (16 + 111) / 2, LCD_WIDTH - 5, (16 + 111) / 2, COLOR_GREEN);
+    gfx_draw_line(buf, LCD_WIDTH / 2, body_top + 2, LCD_WIDTH / 2, body_bottom - 2, COLOR_GREEN);
+    gfx_draw_line(buf, 4, (body_top + body_bottom) / 2, LCD_WIDTH - 5, (body_top + body_bottom) / 2, COLOR_GREEN);
 
     // 대각선
-    gfx_draw_line(buf, 4, 18, LCD_WIDTH - 5, 108, COLOR_DARKGRAY);
-    gfx_draw_line(buf, 4, 108, LCD_WIDTH - 5, 18, COLOR_DARKGRAY);
+    gfx_draw_line(buf, 4, body_top + 2, LCD_WIDTH - 5, body_bottom - 2, COLOR_DARKGRAY);
+    gfx_draw_line(buf, 4, body_bottom - 2, LCD_WIDTH - 5, body_top + 2, COLOR_DARKGRAY);
 
     // 컬러 블록
-    gfx_fill_rect(buf, 10, 25, 20, 15, COLOR_RED);
-    gfx_fill_rect(buf, 35, 25, 20, 15, COLOR_GREEN);
-    gfx_fill_rect(buf, 60, 25, 20, 15, COLOR_BLUE);
-    gfx_fill_rect(buf, 85, 25, 20, 15, COLOR_YELLOW);
+    int block_w = (LCD_WIDTH >= 240) ? 40 : 20;
+    int block_h = (LCD_HEIGHT >= 320) ? 25 : 15;
+    int block_y = body_top + 10;
+    int block_spacing = (LCD_WIDTH - 20) / 4;
+    gfx_fill_rect(buf, 10 + 0 * block_spacing, block_y, block_w, block_h, COLOR_RED);
+    gfx_fill_rect(buf, 10 + 1 * block_spacing, block_y, block_w, block_h, COLOR_GREEN);
+    gfx_fill_rect(buf, 10 + 2 * block_spacing, block_y, block_w, block_h, COLOR_BLUE);
+    gfx_fill_rect(buf, 10 + 3 * block_spacing, block_y, block_w, block_h, COLOR_YELLOW);
 
     // 미니 체커보드
-    for (int y = 75; y < 100; y += 5) {
-        for (int x = 20; x < 105; x += 5) {
+    int checker_y_start = body_bottom - 35;
+    int checker_x_start = LCD_WIDTH / 2 - 40;
+    for (int y = checker_y_start; y < checker_y_start + 25; y += 5) {
+        for (int x = checker_x_start; x < checker_x_start + 80; x += 5) {
             if (((x / 5) + (y / 5)) % 2 == 0) {
                 gfx_fill_rect(buf, x, y, 5, 5, COLOR_CYAN);
             }
@@ -200,7 +214,9 @@ static void render_display_id(uint16_t *buf) {
     gfx_draw_string(buf, 12, 60, id_part1, COLOR_WHITE, GFX_COLOR_TRANSPARENT, 1);
     gfx_draw_string(buf, 12, 72, id_part2, COLOR_WHITE, GFX_COLOR_TRANSPARENT, 1);
 
-    gfx_draw_string(buf, 4, 88, "LCD: ST7735S", COLOR_GREEN, GFX_COLOR_TRANSPARENT, 1);
+    char lcd_info[24];
+    snprintf(lcd_info, sizeof(lcd_info), "LCD: %s", LCD_NAME);
+    gfx_draw_string(buf, 4, 88, lcd_info, COLOR_GREEN, GFX_COLOR_TRANSPARENT, 1);
 
     uint8_t unique_id[8];
     flash_get_unique_id(unique_id);    

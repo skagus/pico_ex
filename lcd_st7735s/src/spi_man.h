@@ -14,8 +14,10 @@
  */
 typedef struct spi_req
 {
-    uint8_t *data;
-    uint32_t len;
+    uint8_t *data;                      // 전송할 데이터 버퍼 포인터
+    uint32_t len;                       // 전송 단위 수 (8비트: 바이트 수, 16비트: 워드 수)
+    uint8_t inline_buf[8];              // 1~8바이트 소형 데이터/커맨드를 직접 담는 인라인 버퍼
+    volatile bool *p_done;              // 호출자의 동기 완료 플래그 포인터 (선택 사항)
     void (*pre_exec)(spi_hw_t *hw);     // before SPI transaction.
     void (*post_exec)(spi_hw_t *hw);    // after SPI transaction.
     struct spi_req *next;
@@ -33,7 +35,7 @@ void spi_man_init(spi_inst_t *spi);
 
 /**
  * @brief 여유 있는 SPI 요청 구조체 할당
- * @return 할당된 spi_req_t 포인터 (여유 슬롯 없을 시 NULL)
+ * @return 할당된 spi_req_t 포인터 (여유 슬롯 없을 시 대기 후 반환)
  */
 spi_req_t* spi_alloc_req(void);
 

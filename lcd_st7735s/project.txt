@@ -20,6 +20,18 @@ H/W 구성
     - RES  -> GP5
     - BL   -> GP6
 
+- LCD2 : ST7789 based color LCD Module
+  - 2.4 inch, 320*240, SPI interface.
+  - Pin 구성
+    - VCC  -> 3V3
+    - GND  -> GND
+    - SCL  -> GP2
+    - SDA  -> GP3
+    - DC   -> GP4
+    - CS   -> GP13
+    - RES  -> GP14
+    - BL   -> GP15
+
 - 버튼 
   - Push Button x 4ea
   - Pin 구성은 아래와 같다
