@@ -32,14 +32,14 @@ static list_widget menus =
     .title = "ST7735",
     .item = {
         "LCD Test",
-        "Display ID",
-        "Display Time",
-        "Display Color",
-        "Display Pattern",
-        "Display Progress",
-        "Display Text",
-        "Display Menu",
-        "Display Button",
+        "Show ID",
+        "Show Time",
+        "Show Color",
+        "Show Pattern",
+        "Show Progress",
+        "Show Text",
+        "Show Menu",
+        "Show Button",
     },
     .item_func = {
         wnd_lcd_test,
@@ -102,7 +102,8 @@ static void render_footer(uint16_t *buf, const char *left_hint, const char *righ
 // ---------------------------------------------------------------------------
 // 메뉴 리스트 렌더링 (menu_ctx 기반)
 // ---------------------------------------------------------------------------
-static void render_menu_list(uint16_t *buf, menu_ctx *ctx) {
+static void render_menu_list(uint16_t *buf, int selected, int scroll_top) {
+
     // 1. Title Bar
     render_header(buf, menus.title);
 
@@ -113,11 +114,11 @@ static void render_menu_list(uint16_t *buf, menu_ctx *ctx) {
     int item_height = available_h / MENU_VISIBLE_COUNT;
 
     for (int i = 0; i < MENU_VISIBLE_COUNT; i++) {
-        int item_idx = ctx->scroll_top + i;
+        int item_idx = scroll_top + i;
         if (item_idx >= menus.num_items) break;
 
         int y = start_y + (i * item_height);
-        bool is_selected = (item_idx == ctx->selected);
+        bool is_selected = (item_idx == selected);
 
         if (is_selected) {
             // 현재 선택된 메뉴는 역상(Inverted) 하이라이트 표시
@@ -148,13 +149,13 @@ static void render_menu_list(uint16_t *buf, menu_ctx *ctx) {
     int max_scroll = menus.num_items - MENU_VISIBLE_COUNT;
     int thumb_y = track_y;
     if (max_scroll > 0) {
-        thumb_y += (ctx->scroll_top * (track_h - thumb_h)) / max_scroll;
+        thumb_y += (scroll_top * (track_h - thumb_h)) / max_scroll;
     }
     gfx_fill_rect(buf, track_x, thumb_y, 4, thumb_h, COLOR_CYAN);
 
     // 4. Status Bar (하단 인디케이터 및 버튼 가이드)
     char status_str[32];
-    snprintf(status_str, sizeof(status_str), "[%02d/%02d]", ctx->selected + 1, menus.num_items);
+    snprintf(status_str, sizeof(status_str), "[%02d/%02d]", selected + 1, menus.num_items);
     render_footer(buf, status_str, "OK:Enter");
 }
 
@@ -639,15 +640,14 @@ widget_act wnd_menu(uint16_t *buf, uint8_t* ctx, bool b_1st) {
         int scroll_top;     // 스크롤 시작 인덱스
     }* my_ctx = ctx;
 
-    if(b_1st) memset(my_ctx, 0x0, sizeof(struct _menu_ctx));
-
     // 첫 진입: context 초기화 및 메뉴 리스트 그리기
     if (b_1st) {
+        memset(my_ctx, 0x0, sizeof(struct _menu_ctx));
         my_ctx->b_active = true;
         my_ctx->selected = 0;
         my_ctx->scroll_top = 0;
         gfx_clear(buf, COLOR_BLACK);
-        render_menu_list(buf, my_ctx);
+        render_menu_list(buf, my_ctx->selected, my_ctx->scroll_top);
         return WG_NONE;
     }
 
@@ -657,7 +657,7 @@ widget_act wnd_menu(uint16_t *buf, uint8_t* ctx, bool b_1st) {
         if (WG_EXIT == ret) {
             my_ctx->b_active = true;
             gfx_clear(buf, COLOR_BLACK);
-            render_menu_list(buf, my_ctx);
+            render_menu_list(buf, my_ctx->selected, my_ctx->scroll_top);
         }
         return WG_NONE;
     }
@@ -671,6 +671,7 @@ widget_act wnd_menu(uint16_t *buf, uint8_t* ctx, bool b_1st) {
         my_ctx->b_active = false;
         // 자식 위젯 첫 호출
         menus.item_func[my_ctx->selected](buf, my_ctx + 1, true);
+        return WG_NONE;
     }
 
     if (button_was_pressed(BTN_UP)) {
@@ -703,7 +704,7 @@ widget_act wnd_menu(uint16_t *buf, uint8_t* ctx, bool b_1st) {
 
     // 메뉴 리스트가 활성 상태 (b_active == true)
     gfx_clear(buf, COLOR_BLACK);
-    render_menu_list(buf, my_ctx);
+    render_menu_list(buf, my_ctx->selected, my_ctx->scroll_top);
 
     return WG_NONE;
 }
