@@ -13,16 +13,15 @@
 // ---------------------------------------------------------------------------
 // Forward declarations (list_item_func 시그니처)
 // ---------------------------------------------------------------------------
-static widget_act render_lcd_test(uint16_t *buf, uint8_t* ctx, bool first_call);
-static widget_act render_display_id(uint16_t *buf, uint8_t* ctx, bool first_call);
-static widget_act render_display_time(uint16_t *buf, uint8_t* ctx, bool first_call);
-static widget_act render_display_color(uint16_t *buf, uint8_t* ctx, bool first_call);
-static widget_act render_display_pattern(uint16_t *buf, uint8_t* ctx, bool first_call);
-static widget_act render_display_progress(uint16_t *buf, uint8_t* ctx, bool first_call);
-static widget_act render_display_text(uint16_t *buf, uint8_t* ctx, bool first_call);
-static widget_act render_display_menu(uint16_t *buf, uint8_t* ctx, bool first_call);
-static widget_act render_display_button(uint16_t *buf, uint8_t* ctx, bool first_call);
-static widget_act render_exit(uint16_t *buf, uint8_t* ctx, bool first_call);
+static widget_act wnd_lcd_test(uint16_t *buf, uint8_t* ctx, bool first_call);
+static widget_act wnd_display_id(uint16_t *buf, uint8_t* ctx, bool first_call);
+static widget_act wnd_display_time(uint16_t *buf, uint8_t* ctx, bool first_call);
+static widget_act wnd_display_color(uint16_t *buf, uint8_t* ctx, bool first_call);
+static widget_act wnd_display_pattern(uint16_t *buf, uint8_t* ctx, bool first_call);
+static widget_act wnd_display_progress(uint16_t *buf, uint8_t* ctx, bool first_call);
+static widget_act wnd_display_text(uint16_t *buf, uint8_t* ctx, bool first_call);
+static widget_act wnd_display_menu(uint16_t *buf, uint8_t* ctx, bool first_call);
+static widget_act wnd_display_button(uint16_t *buf, uint8_t* ctx, bool first_call);
 
 // ---------------------------------------------------------------------------
 // 메뉴 항목 정의 (list_widget)
@@ -43,24 +42,18 @@ static list_widget menus =
         "Display Button",
     },
     .item_func = {
-        render_lcd_test,
-        render_display_id,
-        render_display_time,
-        render_display_color,
-        render_display_pattern,
-        render_display_progress,
-        render_display_text,
-        render_display_menu,
-        render_display_button,
+        wnd_lcd_test,
+        wnd_display_id,
+        wnd_display_time,
+        wnd_display_color,
+        wnd_display_pattern,
+        wnd_display_progress,
+        wnd_display_text,
+        wnd_display_menu,
+        wnd_display_button,
     }
 };
 
-// ---------------------------------------------------------------------------
-// 서브메뉴용 상태값 (아직 context화 되지 않은 것들)
-// ---------------------------------------------------------------------------
-static int sub_menu_selected = 0;
-static float progress_val = 0.0f;
-static float anim_angle = 0.0f;
 
 // ---------------------------------------------------------------------------
 // 시간 포맷 헬퍼 (부팅 후 경과 시간 기반 시:분:초)
@@ -170,48 +163,50 @@ static void render_menu_list(uint16_t *buf, menu_ctx *ctx) {
 // ---------------------------------------------------------------------------
 
 // 1) LCD Test: 테두리, 대각선, 십자선, 체커보드, 컬러박스
-static widget_act render_lcd_test(uint16_t *buf, uint8_t* ctx, bool first_call) {
-    gfx_clear(buf, COLOR_BLACK);
-    render_header(buf, "LCD TEST");
+static widget_act wnd_lcd_test(uint16_t *buf, uint8_t* ctx, bool first_call) {
+    if(first_call) {
+        gfx_clear(buf, COLOR_BLACK);
+        render_header(buf, "LCD TEST");
 
-    int body_top = 18;
-    int body_bottom = LCD_HEIGHT - 18;
-    int body_h = body_bottom - body_top;
+        int body_top = 18;
+        int body_bottom = LCD_HEIGHT - 18;
+        int body_h = body_bottom - body_top;
 
-    // 화면 영역 테두리
-    gfx_draw_rect(buf, 2, body_top, LCD_WIDTH - 4, body_h, COLOR_WHITE);
-    gfx_draw_rect(buf, 4, body_top + 2, LCD_WIDTH - 8, body_h - 4, COLOR_RED);
+        // 화면 영역 테두리
+        gfx_draw_rect(buf, 2, body_top, LCD_WIDTH - 4, body_h, COLOR_WHITE);
+        gfx_draw_rect(buf, 4, body_top + 2, LCD_WIDTH - 8, body_h - 4, COLOR_RED);
 
-    // 십자선
-    gfx_draw_line(buf, LCD_WIDTH / 2, body_top + 2, LCD_WIDTH / 2, body_bottom - 2, COLOR_GREEN);
-    gfx_draw_line(buf, 4, (body_top + body_bottom) / 2, LCD_WIDTH - 5, (body_top + body_bottom) / 2, COLOR_GREEN);
+        // 십자선
+        gfx_draw_line(buf, LCD_WIDTH / 2, body_top + 2, LCD_WIDTH / 2, body_bottom - 2, COLOR_GREEN);
+        gfx_draw_line(buf, 4, (body_top + body_bottom) / 2, LCD_WIDTH - 5, (body_top + body_bottom) / 2, COLOR_GREEN);
 
-    // 대각선
-    gfx_draw_line(buf, 4, body_top + 2, LCD_WIDTH - 5, body_bottom - 2, COLOR_DARKGRAY);
-    gfx_draw_line(buf, 4, body_bottom - 2, LCD_WIDTH - 5, body_top + 2, COLOR_DARKGRAY);
+        // 대각선
+        gfx_draw_line(buf, 4, body_top + 2, LCD_WIDTH - 5, body_bottom - 2, COLOR_DARKGRAY);
+        gfx_draw_line(buf, 4, body_bottom - 2, LCD_WIDTH - 5, body_top + 2, COLOR_DARKGRAY);
 
-    // 컬러 블록
-    int block_w = (LCD_WIDTH >= 240) ? 40 : 20;
-    int block_h = (LCD_HEIGHT >= 320) ? 25 : 15;
-    int block_y = body_top + 10;
-    int block_spacing = (LCD_WIDTH - 20) / 4;
-    gfx_fill_rect(buf, 10 + 0 * block_spacing, block_y, block_w, block_h, COLOR_RED);
-    gfx_fill_rect(buf, 10 + 1 * block_spacing, block_y, block_w, block_h, COLOR_GREEN);
-    gfx_fill_rect(buf, 10 + 2 * block_spacing, block_y, block_w, block_h, COLOR_BLUE);
-    gfx_fill_rect(buf, 10 + 3 * block_spacing, block_y, block_w, block_h, COLOR_YELLOW);
+        // 컬러 블록
+        int block_w = (LCD_WIDTH >= 240) ? 40 : 20;
+        int block_h = (LCD_HEIGHT >= 320) ? 25 : 15;
+        int block_y = body_top + 10;
+        int block_spacing = (LCD_WIDTH - 20) / 4;
+        gfx_fill_rect(buf, 10 + 0 * block_spacing, block_y, block_w, block_h, COLOR_RED);
+        gfx_fill_rect(buf, 10 + 1 * block_spacing, block_y, block_w, block_h, COLOR_GREEN);
+        gfx_fill_rect(buf, 10 + 2 * block_spacing, block_y, block_w, block_h, COLOR_BLUE);
+        gfx_fill_rect(buf, 10 + 3 * block_spacing, block_y, block_w, block_h, COLOR_YELLOW);
 
-    // 미니 체커보드
-    int checker_y_start = body_bottom - 35;
-    int checker_x_start = LCD_WIDTH / 2 - 40;
-    for (int y = checker_y_start; y < checker_y_start + 25; y += 5) {
-        for (int x = checker_x_start; x < checker_x_start + 80; x += 5) {
-            if (((x / 5) + (y / 5)) % 2 == 0) {
-                gfx_fill_rect(buf, x, y, 5, 5, COLOR_CYAN);
+        // 미니 체커보드
+        int checker_y_start = body_bottom - 35;
+        int checker_x_start = LCD_WIDTH / 2 - 40;
+        for (int y = checker_y_start; y < checker_y_start + 25; y += 5) {
+            for (int x = checker_x_start; x < checker_x_start + 80; x += 5) {
+                if (((x / 5) + (y / 5)) % 2 == 0) {
+                    gfx_fill_rect(buf, x, y, 5, 5, COLOR_CYAN);
+                }
             }
         }
-    }
 
-    render_footer(buf, "Pattern OK", "[CANCEL]");
+        render_footer(buf, "Pattern OK", "[CANCEL]");
+    }
 
     // CANCEL로 상위 메뉴 복귀
     if (button_was_pressed(BTN_CANCEL)) {
@@ -221,46 +216,48 @@ static widget_act render_lcd_test(uint16_t *buf, uint8_t* ctx, bool first_call) 
 }
 
 // 2) Display ID: 고유 보드 ID, 클럭, 패널 정보
-static widget_act render_display_id(uint16_t *buf, uint8_t* ctx, bool first_call) {
-    gfx_clear(buf, COLOR_BLACK);
-    render_header(buf, "DEVICE ID");
+static widget_act wnd_display_id(uint16_t *buf, uint8_t* ctx, bool first_call) {
+    if(first_call) {
+        gfx_clear(buf, COLOR_BLACK);
+        render_header(buf, "DEVICE ID");
 
-    char board_id_str[33] = "Unknown";
-    pico_get_unique_board_id_string(board_id_str, sizeof(board_id_str));
+        char board_id_str[33] = "Unknown";
+        pico_get_unique_board_id_string(board_id_str, sizeof(board_id_str));
 
-    uint32_t sys_khz = clock_get_hz(clk_sys) / 1000;
+        uint32_t sys_khz = clock_get_hz(clk_sys) / 1000;
 
-    gfx_draw_string(buf, 4, 20, "MCU: RP2040", COLOR_CYAN, GFX_COLOR_TRANSPARENT, 1);
-    
-    char clk_buf[24];
-    snprintf(clk_buf, sizeof(clk_buf), "Clock:%luMHz", (unsigned long)(sys_khz / 1000));
-    gfx_draw_string(buf, 4, 34, clk_buf, COLOR_WHITE, GFX_COLOR_TRANSPARENT, 1);
+        gfx_draw_string(buf, 4, 20, "MCU: RP2040", COLOR_CYAN, GFX_COLOR_TRANSPARENT, 1);
+        
+        char clk_buf[24];
+        snprintf(clk_buf, sizeof(clk_buf), "Clock:%luMHz", (unsigned long)(sys_khz / 1000));
+        gfx_draw_string(buf, 4, 34, clk_buf, COLOR_WHITE, GFX_COLOR_TRANSPARENT, 1);
 
-    gfx_draw_string(buf, 4, 48, "Board ID:", COLOR_YELLOW, GFX_COLOR_TRANSPARENT, 1);
-    // 16글자 ID를 8자씩 2줄로 표시
-    char id_part1[9] = {0};
-    char id_part2[9] = {0};
-    strncpy(id_part1, board_id_str, 8);
-    if (strlen(board_id_str) >= 8) {
-        strncpy(id_part2, board_id_str + 8, 8);
+        gfx_draw_string(buf, 4, 48, "Board ID:", COLOR_YELLOW, GFX_COLOR_TRANSPARENT, 1);
+        // 16글자 ID를 8자씩 2줄로 표시
+        char id_part1[9] = {0};
+        char id_part2[9] = {0};
+        strncpy(id_part1, board_id_str, 8);
+        if (strlen(board_id_str) >= 8) {
+            strncpy(id_part2, board_id_str + 8, 8);
+        }
+        gfx_draw_string(buf, 12, 60, id_part1, COLOR_WHITE, GFX_COLOR_TRANSPARENT, 1);
+        gfx_draw_string(buf, 12, 72, id_part2, COLOR_WHITE, GFX_COLOR_TRANSPARENT, 1);
+
+        char lcd_info[24];
+        snprintf(lcd_info, sizeof(lcd_info), "LCD: %s", LCD_NAME);
+        gfx_draw_string(buf, 4, 88, lcd_info, COLOR_GREEN, GFX_COLOR_TRANSPARENT, 1);
+
+        uint8_t unique_id[8];
+        flash_get_unique_id(unique_id);    
+
+        char flash_buf[24];
+        snprintf(flash_buf, sizeof(flash_buf), "F ID:%02X%02X_%02X%02X", 
+                unique_id[0], unique_id[1], unique_id[2], unique_id[3]);
+
+        gfx_draw_string(buf, 4, 100, flash_buf, COLOR_MAGENTA, GFX_COLOR_TRANSPARENT, 1);
+
+        render_footer(buf, "Info Ready", "[CANCEL]");
     }
-    gfx_draw_string(buf, 12, 60, id_part1, COLOR_WHITE, GFX_COLOR_TRANSPARENT, 1);
-    gfx_draw_string(buf, 12, 72, id_part2, COLOR_WHITE, GFX_COLOR_TRANSPARENT, 1);
-
-    char lcd_info[24];
-    snprintf(lcd_info, sizeof(lcd_info), "LCD: %s", LCD_NAME);
-    gfx_draw_string(buf, 4, 88, lcd_info, COLOR_GREEN, GFX_COLOR_TRANSPARENT, 1);
-
-    uint8_t unique_id[8];
-    flash_get_unique_id(unique_id);    
-
-    char flash_buf[24];
-    snprintf(flash_buf, sizeof(flash_buf), "F ID:%02X%02X_%02X%02X", 
-            unique_id[0], unique_id[1], unique_id[2], unique_id[3]);
-
-    gfx_draw_string(buf, 4, 100, flash_buf, COLOR_MAGENTA, GFX_COLOR_TRANSPARENT, 1);
-
-    render_footer(buf, "Info Ready", "[CANCEL]");
 
     if (button_was_pressed(BTN_CANCEL)) {
         return WG_EXIT;
@@ -269,7 +266,7 @@ static widget_act render_display_id(uint16_t *buf, uint8_t* ctx, bool first_call
 }
 
 // 3) Display Time: 대형 디지털 시계 및 아날로그 시계 애니메이션
-static widget_act render_display_time(uint16_t *buf, uint8_t* ctx, bool first_call) {
+static widget_act wnd_display_time(uint16_t *buf, uint8_t* ctx, bool first_call) {
     gfx_clear(buf, COLOR_BLACK);
     render_header(buf, "TIME DISP");
 
@@ -330,49 +327,51 @@ static widget_act render_display_time(uint16_t *buf, uint8_t* ctx, bool first_ca
 }
 
 // 4) Display Color: 팔레트 및 그라디언트 바
-static widget_act render_display_color(uint16_t *buf, uint8_t* ctx, bool first_call) {
-    gfx_clear(buf, COLOR_BLACK);
-    render_header(buf, "COLOR PAL");
+static widget_act wnd_display_color(uint16_t *buf, uint8_t* ctx, bool first_call) {
+    if(first_call) {
+        gfx_clear(buf, COLOR_BLACK);
+        render_header(buf, "COLOR PAL");
 
-    static const struct {
-        uint16_t color;
-        const char *name;
-    } palette[] = {
-        {COLOR_RED,     "RED"},
-        {COLOR_GREEN,   "GREEN"},
-        {COLOR_BLUE,    "BLUE"},
-        {COLOR_YELLOW,  "YELLOW"},
-        {COLOR_CYAN,    "CYAN"},
-        {COLOR_MAGENTA, "MAGEN"},
-        {COLOR_ORANGE,  "ORANG"},
-        {COLOR_WHITE,   "WHITE"}
-    };
+        static const struct {
+            uint16_t color;
+            const char *name;
+        } palette[] = {
+            {COLOR_RED,     "RED"},
+            {COLOR_GREEN,   "GREEN"},
+            {COLOR_BLUE,    "BLUE"},
+            {COLOR_YELLOW,  "YELLOW"},
+            {COLOR_CYAN,    "CYAN"},
+            {COLOR_MAGENTA, "MAGEN"},
+            {COLOR_ORANGE,  "ORANG"},
+            {COLOR_WHITE,   "WHITE"}
+        };
 
-    // 8개 색상 블록
-    for (int i = 0; i < 8; i++) {
-        int x = 4 + (i % 4) * 30;
-        int y = 20 + (i / 4) * 26;
-        gfx_fill_rect(buf, x, y, 28, 14, palette[i].color);
-        gfx_draw_rect(buf, x, y, 28, 14, COLOR_LIGHTGRAY);
-        gfx_draw_string(buf, x + 2, y + 16, palette[i].name, COLOR_WHITE, GFX_COLOR_TRANSPARENT, 1);
+        // 8개 색상 블록
+        for (int i = 0; i < 8; i++) {
+            int x = 4 + (i % 4) * 30;
+            int y = 20 + (i / 4) * 26;
+            gfx_fill_rect(buf, x, y, 28, 14, palette[i].color);
+            gfx_draw_rect(buf, x, y, 28, 14, COLOR_LIGHTGRAY);
+            gfx_draw_string(buf, x + 2, y + 16, palette[i].name, COLOR_WHITE, GFX_COLOR_TRANSPARENT, 1);
+        }
+
+        // 그라디언트 바 3종 (R, G, B)
+        gfx_draw_string(buf, 4, 76, "Gradients:", COLOR_LIGHTGRAY, GFX_COLOR_TRANSPARENT, 1);
+        for (int x = 0; x < 120; x++) {
+            uint8_t val5 = (x * 31) / 119;
+            uint8_t val6 = (x * 63) / 119;
+
+            uint16_t r_col = (val5 << 11);
+            uint16_t g_col = (val6 << 5);
+            uint16_t b_col = val5;
+
+            gfx_draw_fast_v_line(buf, 4 + x, 88, 6, r_col);
+            gfx_draw_fast_v_line(buf, 4 + x, 96, 6, g_col);
+            gfx_draw_fast_v_line(buf, 4 + x, 104, 6, b_col);
+        }
+
+        render_footer(buf, "RGB565 16-Bit", "[CANCEL]");
     }
-
-    // 그라디언트 바 3종 (R, G, B)
-    gfx_draw_string(buf, 4, 76, "Gradients:", COLOR_LIGHTGRAY, GFX_COLOR_TRANSPARENT, 1);
-    for (int x = 0; x < 120; x++) {
-        uint8_t val5 = (x * 31) / 119;
-        uint8_t val6 = (x * 63) / 119;
-
-        uint16_t r_col = (val5 << 11);
-        uint16_t g_col = (val6 << 5);
-        uint16_t b_col = val5;
-
-        gfx_draw_fast_v_line(buf, 4 + x, 88, 6, r_col);
-        gfx_draw_fast_v_line(buf, 4 + x, 96, 6, g_col);
-        gfx_draw_fast_v_line(buf, 4 + x, 104, 6, b_col);
-    }
-
-    render_footer(buf, "RGB565 16-Bit", "[CANCEL]");
 
     if (button_was_pressed(BTN_CANCEL)) {
         return WG_EXIT;
@@ -381,7 +380,16 @@ static widget_act render_display_color(uint16_t *buf, uint8_t* ctx, bool first_c
 }
 
 // 5) Display Pattern: 기하학적 도형 및 동심원 패턴
-static widget_act render_display_pattern(uint16_t *buf, uint8_t* ctx, bool first_call) {
+static widget_act wnd_display_pattern(uint16_t *buf, uint8_t* ctx, bool first_call) {
+    struct {
+        float anim_angle;
+    } * my_ctx = ctx;
+
+    if(first_call)
+    {
+        my_ctx->anim_angle = 0.0f;
+    }
+
     gfx_clear(buf, COLOR_BLACK);
     render_header(buf, "PATTERNS");
 
@@ -389,11 +397,11 @@ static widget_act render_display_pattern(uint16_t *buf, uint8_t* ctx, bool first
     int center_y = 64;
 
     // 회전하는 방사형 선 패턴
-    anim_angle += 0.05f;
-    if (anim_angle > 6.28f) anim_angle = 0.0f;
+    my_ctx->anim_angle += 0.05f;
+    if (my_ctx->anim_angle > 6.28f) my_ctx->anim_angle = 0.0f;
 
     for (int i = 0; i < 12; i++) {
-        float angle = anim_angle + (i * (6.28318f / 12.0f));
+        float angle = my_ctx->anim_angle + (i * (6.28318f / 12.0f));
         int px = center_x + (int)(cosf(angle) * 44);
         int py = center_y + (int)(sinf(angle) * 44);
         uint16_t line_col = (i % 2 == 0) ? COLOR_CYAN : COLOR_MAGENTA;
@@ -418,15 +426,25 @@ static widget_act render_display_pattern(uint16_t *buf, uint8_t* ctx, bool first
 }
 
 // 6) Display Progress: 게이지 바 및 회전 스피너
-static widget_act render_display_progress(uint16_t *buf, uint8_t* ctx, bool first_call) {
+static widget_act wnd_display_progress(uint16_t *buf, uint8_t* ctx, bool first_call) {
+
+    struct {
+        float progress_val;
+    } * my_ctx = ctx;
+
+    if(first_call)
+    {
+        my_ctx->progress_val = 0.0f;
+    }
+
     gfx_clear(buf, COLOR_BLACK);
     render_header(buf, "PROGRESS");
 
     // 프로그레스 증가
-    progress_val += 1.2f;
-    if (progress_val > 100.0f) progress_val = 0.0f;
+    my_ctx->progress_val += 1.2f;
+    if (my_ctx->progress_val > 100.0f) my_ctx->progress_val = 0.0f;
 
-    int p = (int)progress_val;
+    int p = (int)my_ctx->progress_val;
 
     // 상단 텍스트
     char p_str[32];
@@ -454,7 +472,7 @@ static widget_act render_display_progress(uint16_t *buf, uint8_t* ctx, bool firs
     int sp_cx = 64;
     int sp_cy = 98;
     int sp_r = 10;
-    float sp_angle = (progress_val * 3.6f) * 3.14159f / 180.0f;
+    float sp_angle = (my_ctx->progress_val * 3.6f) * 3.14159f / 180.0f;
     int sp_x = sp_cx + (int)(cosf(sp_angle) * sp_r);
     int sp_y = sp_cy + (int)(sinf(sp_angle) * sp_r);
 
@@ -470,25 +488,27 @@ static widget_act render_display_progress(uint16_t *buf, uint8_t* ctx, bool firs
 }
 
 // 7) Display Text: 다양한 크기 및 색상 텍스트 데모
-static widget_act render_display_text(uint16_t *buf, uint8_t* ctx, bool first_call) {
-    gfx_clear(buf, COLOR_BLACK);
-    render_header(buf, "TEXT DEMO");
+static widget_act wnd_display_text(uint16_t *buf, uint8_t* ctx, bool first_call) {
+    if(first_call) {
+        gfx_clear(buf, COLOR_BLACK);
+        render_header(buf, "TEXT DEMO");
 
-    gfx_draw_string(buf, 4, 18, "ST7735S 1.44\"", COLOR_CYAN, GFX_COLOR_TRANSPARENT, 1);
-    gfx_draw_string(buf, 4, 30, "Font: 8x8 ASCII", COLOR_WHITE, GFX_COLOR_TRANSPARENT, 1);
+        gfx_draw_string(buf, 4, 18, "ST7735S 1.44\"", COLOR_CYAN, GFX_COLOR_TRANSPARENT, 1);
+        gfx_draw_string(buf, 4, 30, "Font: 8x8 ASCII", COLOR_WHITE, GFX_COLOR_TRANSPARENT, 1);
 
-    // 2x 스케일 폰트
-    gfx_draw_string(buf, 4, 44, "SIZE 2X", COLOR_YELLOW, GFX_COLOR_TRANSPARENT, 2);
+        // 2x 스케일 폰트
+        gfx_draw_string(buf, 4, 44, "SIZE 2X", COLOR_YELLOW, GFX_COLOR_TRANSPARENT, 2);
 
-    gfx_draw_string(buf, 4, 66, "Red Green Blue", COLOR_MAGENTA, GFX_COLOR_TRANSPARENT, 1);
-    
-    // 반전 텍스트 박스
-    gfx_fill_rect(buf, 4, 80, 120, 14, COLOR_WHITE);
-    gfx_draw_string(buf, 8, 83, "INVERTED TEXT", COLOR_BLACK, GFX_COLOR_TRANSPARENT, 1);
+        gfx_draw_string(buf, 4, 66, "Red Green Blue", COLOR_MAGENTA, GFX_COLOR_TRANSPARENT, 1);
+        
+        // 반전 텍스트 박스
+        gfx_fill_rect(buf, 4, 80, 120, 14, COLOR_WHITE);
+        gfx_draw_string(buf, 8, 83, "INVERTED TEXT", COLOR_BLACK, GFX_COLOR_TRANSPARENT, 1);
 
-    gfx_draw_string(buf, 4, 98, "Line 1234567890", COLOR_GREEN, GFX_COLOR_TRANSPARENT, 1);
+        gfx_draw_string(buf, 4, 98, "Line 1234567890", COLOR_GREEN, GFX_COLOR_TRANSPARENT, 1);
 
-    render_footer(buf, "Scale & Color", "[CANCEL]");
+        render_footer(buf, "Scale & Color", "[CANCEL]");
+    }
 
     if (button_was_pressed(BTN_CANCEL)) {
         return WG_EXIT;
@@ -497,12 +517,26 @@ static widget_act render_display_text(uint16_t *buf, uint8_t* ctx, bool first_ca
 }
 
 // 8) Display Menu: 계층형 서브메뉴 예시
-static widget_act render_display_menu(uint16_t *buf, uint8_t* ctx, bool first_call) {
+static widget_act wnd_display_menu(uint16_t *buf, uint8_t* ctx, bool first_call) {
     gfx_clear(buf, COLOR_BLACK);
     render_header(buf, "SUB MENU");
 
+    struct {
+        int sub_menu_selected;
+    }* my_ctx = ctx;
+
     if (first_call) {
-        sub_menu_selected = 0;
+        my_ctx->sub_menu_selected = 0;
+    }
+
+    // 서브메뉴 내에서의 UP / DOWN
+    if (button_was_pressed(BTN_UP)) {
+        if (my_ctx->sub_menu_selected > 0) my_ctx->sub_menu_selected--;
+        else my_ctx->sub_menu_selected = 3;
+    }
+    if (button_was_pressed(BTN_DOWN)) {
+        if (my_ctx->sub_menu_selected < 3) my_ctx->sub_menu_selected++;
+        else my_ctx->sub_menu_selected = 0;
     }
 
     const char *sub_items[] = {
@@ -516,7 +550,7 @@ static widget_act render_display_menu(uint16_t *buf, uint8_t* ctx, bool first_ca
 
     for (int i = 0; i < 4; i++) {
         int y = 36 + (i * 18);
-        bool is_sel = (i == sub_menu_selected);
+        bool is_sel = (i == my_ctx->sub_menu_selected);
 
         if (is_sel) {
             gfx_fill_rect(buf, 6, y, 116, 14, COLOR_CYAN);
@@ -533,15 +567,6 @@ static widget_act render_display_menu(uint16_t *buf, uint8_t* ctx, bool first_ca
 
     render_footer(buf, "UP/DN:Select", "[CANCEL]");
 
-    // 서브메뉴 내에서의 UP / DOWN
-    if (button_was_pressed(BTN_UP)) {
-        if (sub_menu_selected > 0) sub_menu_selected--;
-        else sub_menu_selected = 3;
-    }
-    if (button_was_pressed(BTN_DOWN)) {
-        if (sub_menu_selected < 3) sub_menu_selected++;
-        else sub_menu_selected = 0;
-    }
     if (button_was_pressed(BTN_CANCEL)) {
         return WG_EXIT;
     }
@@ -549,7 +574,7 @@ static widget_act render_display_menu(uint16_t *buf, uint8_t* ctx, bool first_ca
 }
 
 // 9) Display Button: 4개 버튼의 실시간 눌림 상태를 그래픽 박스로 표시
-static widget_act render_display_button(uint16_t *buf, uint8_t* ctx, bool first_call) {
+static widget_act wnd_display_button(uint16_t *buf, uint8_t* ctx, bool first_call) {
     gfx_clear(buf, COLOR_BLACK);
     render_header(buf, "BTN TEST");
 
@@ -598,12 +623,6 @@ static widget_act render_display_button(uint16_t *buf, uint8_t* ctx, bool first_
     return WG_NONE;
 }
 
-// 10) Exit: 대기 / 절전 화면 → 상위(ui_main)로 WG_EXIT 반환
-static widget_act render_exit(uint16_t *buf, uint8_t* ctx, bool first_call) {
-    // Exit 메뉴를 선택하면 즉시 상위로 복귀
-    return WG_EXIT;
-}
-
 // ---------------------------------------------------------------------------
 // 메뉴 위젯: context stack 기반 list menu
 // ---------------------------------------------------------------------------
@@ -611,37 +630,37 @@ static widget_act render_exit(uint16_t *buf, uint8_t* ctx, bool first_call) {
 //   [main_ctx] [menu_ctx] [자식 위젯 ctx ...]
 //              ^-- p_ctx 가 가리키는 위치
 // ---------------------------------------------------------------------------
-widget_act ui_menu(uint16_t *buf, uint8_t* p_ctx, bool b_1st) {
+widget_act wnd_menu(uint16_t *buf, uint8_t* ctx, bool b_1st) {
     if (!buf) return WG_NONE;
 
-    menu_ctx* ctx = (menu_ctx*)p_ctx;
-    if(b_1st) memset(ctx, 0x0, sizeof(menu_ctx));
+    struct _menu_ctx {
+        bool b_active;      // true: 메뉴 리스트 표시 중, false: 자식 위젯 활성
+        int selected;       // 현재 선택된 항목 인덱스
+        int scroll_top;     // 스크롤 시작 인덱스
+    }* my_ctx = ctx;
 
-    sleep_ms(1);
+    if(b_1st) memset(my_ctx, 0x0, sizeof(struct _menu_ctx));
+
     // 첫 진입: context 초기화 및 메뉴 리스트 그리기
     if (b_1st) {
-        ctx->b_active = true;
-        ctx->selected = 0;
-        ctx->scroll_top = 0;
+        my_ctx->b_active = true;
+        my_ctx->selected = 0;
+        my_ctx->scroll_top = 0;
         gfx_clear(buf, COLOR_BLACK);
-        render_menu_list(buf, ctx);
+        render_menu_list(buf, my_ctx);
         return WG_NONE;
     }
 
-    sleep_ms(1);
-
     // 자식 위젯이 활성 상태인 경우 (b_active == false)
-    if (!ctx->b_active) {
-        widget_act ret = menus.item_func[ctx->selected](buf, ctx + 1, false);
+    if (!my_ctx->b_active) {
+        widget_act ret = menus.item_func[my_ctx->selected](buf, my_ctx + 1, false);
         if (WG_EXIT == ret) {
-            ctx->b_active = true;
+            my_ctx->b_active = true;
             gfx_clear(buf, COLOR_BLACK);
-            render_menu_list(buf, ctx);
+            render_menu_list(buf, my_ctx);
         }
         return WG_NONE;
     }
-
-    sleep_ms(1);
 
     // 입력 처리
     if (button_was_pressed(BTN_CANCEL)) {
@@ -649,45 +668,42 @@ widget_act ui_menu(uint16_t *buf, uint8_t* p_ctx, bool b_1st) {
     }
     else if (button_was_pressed(BTN_OK)) {
         // 선택된 항목의 자식 위젯 진입
-        ctx->b_active = false;
-        progress_val = 0.0f;
+        my_ctx->b_active = false;
         // 자식 위젯 첫 호출
-        menus.item_func[ctx->selected](buf, ctx + 1, true);
-    }    
+        menus.item_func[my_ctx->selected](buf, my_ctx + 1, true);
+    }
 
     if (button_was_pressed(BTN_UP)) {
-        if (ctx->selected > 0) {
-            ctx->selected--;
-            if (ctx->selected < ctx->scroll_top) {
-                ctx->scroll_top = ctx->selected;
+        if (my_ctx->selected > 0) {
+            my_ctx->selected--;
+            if (my_ctx->selected < my_ctx->scroll_top) {
+                my_ctx->scroll_top = my_ctx->selected;
             }
         } else {
             // 맨 위에서 UP → 맨 아래로 래핑
-            ctx->selected = menus.num_items - 1;
+            my_ctx->selected = menus.num_items - 1;
             if (menus.num_items > MENU_VISIBLE_COUNT) {
-                ctx->scroll_top = menus.num_items - MENU_VISIBLE_COUNT;
+                my_ctx->scroll_top = menus.num_items - MENU_VISIBLE_COUNT;
             }
         }
     }
 
     if (button_was_pressed(BTN_DOWN)) {
-        if (ctx->selected < menus.num_items - 1) {
-            ctx->selected++;
-            if (ctx->selected >= ctx->scroll_top + MENU_VISIBLE_COUNT) {
-                ctx->scroll_top = ctx->selected - MENU_VISIBLE_COUNT + 1;
+        if (my_ctx->selected < menus.num_items - 1) {
+            my_ctx->selected++;
+            if (my_ctx->selected >= my_ctx->scroll_top + MENU_VISIBLE_COUNT) {
+                my_ctx->scroll_top = my_ctx->selected - MENU_VISIBLE_COUNT + 1;
             }
         } else {
             // 맨 아래에서 DOWN → 맨 위로 래핑
-            ctx->selected = 0;
-            ctx->scroll_top = 0;
+            my_ctx->selected = 0;
+            my_ctx->scroll_top = 0;
         }
     }
 
-    sleep_ms(1);
-
     // 메뉴 리스트가 활성 상태 (b_active == true)
     gfx_clear(buf, COLOR_BLACK);
-    render_menu_list(buf, ctx);
+    render_menu_list(buf, my_ctx);
 
     return WG_NONE;
 }
@@ -727,9 +743,6 @@ void ui_init(void) {
     memset(ctx_buf, 0, sizeof(ctx_buf));
     main_ctx* p = (main_ctx*)ctx_buf;
     p->b_active = true;
-    sub_menu_selected = 0;
-    progress_val = 0.0f;
-    anim_angle = 0.0f;
 }
 
 void ui_main(uint16_t* buf) {
@@ -743,7 +756,7 @@ void ui_main(uint16_t* buf) {
         // Standby 화면
         if (button_was_pressed(BTN_OK)) {
             p_ctx->b_active = false;
-            ui_menu(buf, (uint8_t*)p_ctx + sizeof(main_ctx), true);
+            wnd_menu(buf, (uint8_t*)p_ctx + sizeof(main_ctx), true);
         }
         else{
             render_main(buf);
@@ -751,7 +764,7 @@ void ui_main(uint16_t* buf) {
     }
     else {
         // 메뉴 위젯 활성
-        widget_act ret = ui_menu(buf, p_ctx + 1, false);
+        widget_act ret = wnd_menu(buf, p_ctx + 1, false);
         if (ret == WG_EXIT) {
             // 메뉴에서 Exit → Standby 화면으로
             p_ctx->b_active = true;
