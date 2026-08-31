@@ -59,14 +59,14 @@ int main(void) {
             ui_prev = curr;
 
             // 1. 버튼 상태 갱신 및 디바운싱
-            button_update();
+            // button_update();
 
             // 2. UI 상태 및 네비게이션 로직 처리
-            ui_update();
+            //ui_update();
 
             // 3. 백버퍼에 현재 UI 화면 렌더링
-            uint16_t *draw_buf = g_frame_buffers[draw_idx];
-            ui_render(draw_buf);
+            uint16_t *draw_buf = g_frame_buffers[0]; // draw_idx];
+            ui_main(draw_buf);
 
             // 4. 렌더링된 버퍼를 16비트 SPI DMA로 전송 시작 (Fire & Forget)
             lcd_draw_frame_buffer(draw_buf);
