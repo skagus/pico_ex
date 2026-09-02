@@ -5,7 +5,7 @@
 #include <stdbool.h>
 
 #define MENU_ITEM_COUNT     10
-#define MENU_VISIBLE_COUNT  6
+#define MENU_VISIBLE_COUNT  8
 
 #define MAX_LIST_ITEM   (16)
 

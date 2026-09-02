@@ -126,13 +126,13 @@ static void render_menu_list(uint16_t *buf, int selected, int scroll_top) {
             
             // 번호와 메뉴명 출력 (검은색 폰트)
             char text[32];
-            snprintf(text, sizeof(text), ">%d.%-11s", item_idx + 1, menus.item[item_idx]);
+            snprintf(text, sizeof(text), "%-11s", menus.item[item_idx]);
             gfx_draw_string(buf, 4, y + (item_height - 8) / 2, text, COLOR_BLACK, GFX_COLOR_TRANSPARENT, 1);
         } else {
             // 미선택 메뉴는 일반 텍스트
             gfx_fill_rect(buf, 2, y + 1, LCD_WIDTH - 10, item_height - 2, COLOR_BLACK);
             char text[32];
-            snprintf(text, sizeof(text), " %d.%-11s", item_idx + 1, menus.item[item_idx]);
+            snprintf(text, sizeof(text), "%-11s", menus.item[item_idx]);
             gfx_draw_string(buf, 4, y + (item_height - 8) / 2, text, COLOR_LIGHTGRAY, GFX_COLOR_TRANSPARENT, 1);
         }
     }
@@ -712,19 +712,23 @@ widget_act wnd_menu(uint16_t *buf, uint8_t* ctx, bool b_1st) {
 // ---------------------------------------------------------------------------
 // 최상위 메인 화면 (대기/Standby)
 // ---------------------------------------------------------------------------
-static void render_main(uint16_t *buf) {
+static void render_main(uint16_t *buf, int win_id) {
     gfx_clear(buf, COLOR_BLACK);
-    render_header(buf, "STANDBY");
+
+    render_header(buf, "MAIN");
 
     // 중앙 안내 박스
-    gfx_fill_rect(buf, 10, 35, 108, 60, COLOR_NAVY);
-    gfx_draw_rect(buf, 10, 35, 108, 60, COLOR_CYAN);
+    gfx_fill_rect(buf, 10, 25, 108, 70, COLOR_NAVY);
+    gfx_draw_rect(buf, 10, 25, 108, 70, COLOR_CYAN);
 
-    gfx_draw_string_centered(buf, 45, "SYSTEM IDLE", COLOR_YELLOW, GFX_COLOR_TRANSPARENT, 1);
-    gfx_draw_string_centered(buf, 60, "Press [OK]", COLOR_WHITE, GFX_COLOR_TRANSPARENT, 1);
-    gfx_draw_string_centered(buf, 75, "to Enter Menu", COLOR_WHITE, GFX_COLOR_TRANSPARENT, 1);
+    gfx_draw_string_centered(buf, 35, "SYSTEM IDLE", COLOR_YELLOW, GFX_COLOR_TRANSPARENT, 1);
+    gfx_draw_string_centered(buf, 50, "Press [OK]", COLOR_WHITE, GFX_COLOR_TRANSPARENT, 1);
+    gfx_draw_string_centered(buf, 65, "to Enter Menu", COLOR_WHITE, GFX_COLOR_TRANSPARENT, 1);
+    gfx_draw_string_centered(buf, 80, "<< >>", COLOR_WHITE, GFX_COLOR_TRANSPARENT, 1);
 
-    render_footer(buf, "Idle Mode", "OK:Menu");
+    char foot[30];
+    sprintf(foot, "Win %2d", win_id);
+    render_footer(buf, foot, "OK:Menu");
 }
 
 // ---------------------------------------------------------------------------
@@ -737,14 +741,18 @@ static uint8_t ctx_buf[512];
 
 typedef struct _main_ctx {
     bool b_active;  // true: standby 화면, false: 메뉴 위젯 활성
-    uint8_t reserved[3];
+    int n_act_win;
 } main_ctx;
+
 
 void ui_init(void) {
     memset(ctx_buf, 0, sizeof(ctx_buf));
     main_ctx* p = (main_ctx*)ctx_buf;
     p->b_active = true;
+    p->n_act_win = 0;
 }
+
+#define NUM_MAIN_WIN        (3)
 
 void ui_main(uint16_t* buf) {
     if (!buf) return;
@@ -759,8 +767,15 @@ void ui_main(uint16_t* buf) {
             p_ctx->b_active = false;
             wnd_menu(buf, (uint8_t*)p_ctx + sizeof(main_ctx), true);
         }
-        else{
-            render_main(buf);
+        else {
+            // Don't care about Button's direction.
+            if (button_was_pressed(BTN_DOWN)) {
+                p_ctx->n_act_win = (p_ctx->n_act_win + 1) % NUM_MAIN_WIN;
+            }
+            else if(button_was_pressed(BTN_UP)) {
+                p_ctx->n_act_win = (p_ctx->n_act_win + NUM_MAIN_WIN - 1) % NUM_MAIN_WIN;
+            }
+            render_main(buf, p_ctx->n_act_win);
         }
     }
     else {
@@ -769,7 +784,7 @@ void ui_main(uint16_t* buf) {
         if (ret == WG_EXIT) {
             // 메뉴에서 Exit → Standby 화면으로
             p_ctx->b_active = true;
-            render_main(buf);
+            render_main(buf, p_ctx->n_act_win);
         }
     }
 }
